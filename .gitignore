@@ -187,6 +187,9 @@ DocProject/Help/html
 # Click-Once directory
 publish/
 
+# Build zip
+app.zip
+
 # Publish Web Output
 *.[Pp]ublish.xml
 *.azurePubxml
@@ -480,3 +483,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Claude
+CLAUDE.md
