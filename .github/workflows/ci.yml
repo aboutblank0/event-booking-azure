@@ -1,0 +1,11 @@
+name: CI
+on: [push, pull_request]        # run on every push and pull request
+jobs:
+  build:
+    runs-on: ubuntu-latest       # a fresh Linux VM provided free by GitHub
+    steps:
+      - uses: actions/checkout@v4          # get your code
+      - uses: actions/setup-dotnet@v4      # install .NET
+        with: { global-json-file: global.json }   # the version you pinned
+      - run: dotnet build
+      - run: dotnet test
