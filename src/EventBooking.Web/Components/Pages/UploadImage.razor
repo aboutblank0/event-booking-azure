@@ -1,0 +1,19 @@
+@page "/upload-image"
+
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize]
+
+<PageTitle>Upload image</PageTitle>
+
+<h1>Upload image</h1>
+
+<p>JPEG, PNG or WebP, up to 2 MB.</p>
+
+@* A plain HTML form posting to the /api/images endpoint. AntiforgeryToken adds a hidden
+   token field that the endpoint checks, so other sites can't submit this form for you. *@
+<form method="post" action="api/images" enctype="multipart/form-data">
+    <AntiforgeryToken />
+    <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required class="form-control mb-3" />
+    <button type="submit" class="btn btn-primary">Upload</button>
+</form>
