@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\EventBooking.Core\EventBooking.Core.csproj" />
+    <ProjectReference Include="..\..\src\EventBooking.Web\EventBooking.Web.csproj" />
   </ItemGroup>
 
 </Project>
