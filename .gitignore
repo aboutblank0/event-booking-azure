@@ -486,3 +486,7 @@ $RECYCLE.BIN/
 
 # Claude
 CLAUDE.md
+.claude/
+
+# Local docs
+docs/
