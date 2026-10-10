@@ -1,8 +1,6 @@
 using EventBooking.Core;
 using EventBooking.Web.Data;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace EventBooking.Tests;
 
@@ -12,20 +10,7 @@ namespace EventBooking.Tests;
 /// </summary>
 public class DatabaseMappingTests
 {
-    private static ApplicationDbContext CreateContext()
-    {
-        // IdentityDbContext reads the Identity schema version from the app's services. Without
-        // this it would build the older schema (no passkeys table) and not match the migrations.
-        // Keep in sync with AddIdentityCore in Program.cs.
-        var appServices = new ServiceCollection()
-            .Configure<IdentityOptions>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
-            .BuildServiceProvider();
-
-        return new(new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer("Server=unused")
-            .UseApplicationServiceProvider(appServices)
-            .Options);
-    }
+    private static ApplicationDbContext CreateContext() => TestDbContextFactory.Create("Server=unused");
 
     [Fact]
     public void Migrations_AreUpToDateWithTheModel()
