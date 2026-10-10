@@ -1,5 +1,8 @@
 name: CI
-on: [push, pull_request]        # run on every push and pull request
+on:
+  push:
+    branches: [main]            # run when main changes (e.g. a PR is merged)
+  pull_request:                 # run on every pull request; covers pushes to PR branches
 jobs:
   build:
     runs-on: ubuntu-latest       # a fresh Linux VM provided free by GitHub
