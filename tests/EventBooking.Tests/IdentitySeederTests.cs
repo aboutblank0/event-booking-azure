@@ -14,18 +14,16 @@ namespace EventBooking.Tests;
 public class IdentitySeederTests(SqlServerFixture database)
 {
     /// <summary>
-    /// The same Identity services as Program.cs, pointed at the test database. RoleManager and
-    /// UserManager need a lot of supporting services, so it's easier to let Identity register them.
+    /// The app's Identity services (the same method Program.cs calls), pointed at the test database.
+    /// Logging and data protection are normally added by the web host, so the test adds them itself.
     /// </summary>
     private ServiceProvider CreateServices()
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddDataProtection();
         services.AddDbContext<ApplicationDbContext>(o => o.UseSqlServer(database.ConnectionString));
-        services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
-            .AddRoles<IdentityRole>()
-            .AddEntityFrameworkStores<ApplicationDbContext>();
-        services.AddScoped<IdentitySeeder>();
+        services.AddEventBookingIdentity();
         return services.BuildServiceProvider();
     }
 

@@ -31,20 +31,9 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString, o => o.EnableRetryOnFailure()));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services.AddIdentityCore<ApplicationUser>(options =>
-    {
-        options.SignIn.RequireConfirmedAccount = true;
-        options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
-    })
-    // Turns on role support (RoleManager, roles in the login cookie). IdentityRole is the
-    // built-in role class, stored in the AspNetRoles table.
-    .AddRoles<IdentityRole>()
-    .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddSignInManager()
-    .AddDefaultTokenProviders();
+builder.Services.AddEventBookingIdentity();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
-builder.Services.AddScoped<IdentitySeeder>();
 
 // Azure Blob Storage for event images. There is no key or connection string: the app signs in
 // with an Entra ID identity instead. Locally that's your `az login` user; on Azure it's the
