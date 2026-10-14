@@ -1,0 +1,148 @@
+@page "/Account/RegisterOrganiser"
+
+@using System.ComponentModel.DataAnnotations
+@using System.Text
+@using System.Text.Encodings.Web
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.WebUtilities
+@using EventBooking.Core
+@using EventBooking.Web.Data
+@using EventBooking.Web.Services
+
+@inject UserManager<ApplicationUser> UserManager
+@inject IEmailSender<ApplicationUser> EmailSender
+@inject OrganiserApplicationService Applications
+@inject ILogger<RegisterOrganiser> Logger
+@inject NavigationManager NavigationManager
+@inject IdentityRedirectManager RedirectManager
+
+@*
+    Creates the account and the organiser application in one step (docs/roles-design.md).
+    The account part works like Register.razor; keep the two in step.
+*@
+
+<PageTitle>Register as an organiser</PageTitle>
+
+<h1>Register as an organiser</h1>
+
+<div class="row">
+    <div class="col-lg-6">
+        <StatusMessage Message="@Message" />
+        <EditForm Model="Input" method="post" OnValidSubmit="RegisterAsync" FormName="register-organiser">
+            <DataAnnotationsValidator />
+            <p>Create an account and apply to organise events. An admin reviews each application.</p>
+            <ValidationSummary class="text-danger" role="alert" />
+
+            <h2>Your account</h2>
+            <hr />
+            <div class="form-floating mb-3">
+                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
+                <label for="Input.Email">Email</label>
+                <ValidationMessage For="() => Input.Email" class="text-danger" />
+            </div>
+            <div class="form-floating mb-3">
+                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
+                <label for="Input.Password">Password</label>
+                <ValidationMessage For="() => Input.Password" class="text-danger" />
+            </div>
+            <div class="form-floating mb-3">
+                <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
+                <label for="Input.ConfirmPassword">Confirm Password</label>
+                <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
+            </div>
+
+            <h2>Your organisation</h2>
+            <hr />
+            <OrganiserApplicationFields Input="Input" />
+
+            <button type="submit" class="w-100 btn btn-lg btn-primary">Register and apply</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private IEnumerable<IdentityError>? identityErrors;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private string? Message => identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}";
+
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+    }
+
+    private async Task RegisterAsync()
+    {
+        // Same as Register.razor: the email is also the user name.
+        var user = new ApplicationUser { UserName = Input.Email, Email = Input.Email };
+        var result = await UserManager.CreateAsync(user, Input.Password);
+        if (!result.Succeeded)
+        {
+            identityErrors = result.Errors;
+            return;
+        }
+
+        Logger.LogInformation("User created a new account with password, applying to be an organiser.");
+
+        // A brand-new user has no roles and no earlier applications, and the form already checked
+        // the fields, so this shouldn't fail. If it somehow does, the account still exists, so
+        // tell the user and let them apply again from their account page.
+        string? applicationError = null;
+        try
+        {
+            await Applications.ApplyAsync(user.Id, Input.OrganisationName, Input.ContactPhone, Input.Website, Input.Description);
+        }
+        catch (BusinessRuleException ex)
+        {
+            Logger.LogWarning("A new user's organiser application failed: {Reason}", ex.Message);
+            applicationError = $"Error: Your account was created, but your application wasn't sent ({ex.Message}). " +
+                "You can apply from your account page once you've signed in.";
+        }
+
+        // From here on, the same as Register.razor (RequireConfirmedAccount is on in IdentitySetup).
+        var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
+        code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+        var callbackUrl = NavigationManager.GetUriWithQueryParameters(
+            NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
+            new Dictionary<string, object?> { ["userId"] = user.Id, ["code"] = code });
+
+        await EmailSender.SendConfirmationLinkAsync(user, Input.Email, HtmlEncoder.Default.Encode(callbackUrl));
+
+        var confirmationUrl = NavigationManager.GetUriWithQueryParameters(
+            NavigationManager.ToAbsoluteUri("Account/RegisterConfirmation").AbsoluteUri,
+            new Dictionary<string, object?> { ["email"] = Input.Email });
+        if (applicationError is null)
+        {
+            RedirectManager.RedirectTo(confirmationUrl);
+        }
+        else
+        {
+            RedirectManager.RedirectToWithStatus(confirmationUrl, applicationError, HttpContext);
+        }
+    }
+
+    // Inherits the application fields, so OrganiserApplicationFields can show them.
+    private sealed class InputModel : OrganiserApplicationInput
+    {
+        [Required]
+        [EmailAddress]
+        [Display(Name = "Email")]
+        public string Email { get; set; } = "";
+
+        [Required]
+        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
+        [DataType(DataType.Password)]
+        [Display(Name = "Password")]
+        public string Password { get; set; } = "";
+
+        [DataType(DataType.Password)]
+        [Display(Name = "Confirm password")]
+        [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
+        public string ConfirmPassword { get; set; } = "";
+    }
+}

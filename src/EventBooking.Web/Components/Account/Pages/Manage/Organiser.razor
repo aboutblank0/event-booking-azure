@@ -1,0 +1,110 @@
+@page "/Account/Manage/Organiser"
+
+@using EventBooking.Core
+@using EventBooking.Web.Services
+@using Microsoft.AspNetCore.Identity
+@using EventBooking.Web.Data
+
+@inject UserManager<ApplicationUser> UserManager
+@inject OrganiserApplicationService Applications
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Become an organiser</PageTitle>
+
+<h3>Become an organiser</h3>
+<StatusMessage Message="@errorMessage" />
+
+@* The latest decision, if the user has applied before (docs/roles-design.md, process step 5). *@
+@if (latest is { Status: ApplicationStatus.Pending })
+{
+    <p>Your application for <strong>@latest.OrganisationName</strong> is waiting for review.</p>
+}
+else if (latest is { Status: ApplicationStatus.Rejected })
+{
+    <p>
+        Your application for <strong>@latest.OrganisationName</strong> was rejected@(latest.RejectionReason is null ? "." : ":")
+        @latest.RejectionReason
+    </p>
+}
+
+@if (isOrganiser)
+{
+    <p>You are an organiser.</p>
+}
+else if (reasonCannotApply is not null && latest?.Status != ApplicationStatus.Pending)
+{
+    @* A pending application is already described above. *@
+    <p>@reasonCannotApply</p>
+}
+
+@*
+    The form is always rendered, even when the user can't apply. A POST is handled by the form of
+    that name on the freshly loaded page; after a double submit (or from a second open tab) the
+    form would otherwise be missing and Blazor would answer with a bare "400 Bad Request" instead
+    of our error message.
+*@
+<div class="row">
+    <div class="col-xl-6">
+        <EditForm Model="Input" FormName="apply-organiser" OnValidSubmit="ApplyAsync" method="post">
+            @if (reasonCannotApply is null)
+            {
+                <p>Organisers can create events and manage them. An admin reviews each application.</p>
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" role="alert" />
+                <OrganiserApplicationFields Input="Input" />
+                <button type="submit" class="w-100 btn btn-lg btn-primary">Apply</button>
+            }
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private string userId = "";
+    private bool isOrganiser;
+    private OrganiserApplication? latest;
+    private string? reasonCannotApply;
+    private string? errorMessage;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private OrganiserApplicationInput Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+
+        var user = await UserManager.GetUserAsync(HttpContext.User);
+        if (user is null)
+        {
+            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            return;
+        }
+
+        userId = user.Id;
+        // Fine for display: on this kind of page, every click is a new request, and the login
+        // cookie is checked against the database on every request. The service checks again anyway.
+        isOrganiser = HttpContext.User.IsInRole(Roles.Organiser);
+        latest = await Applications.GetLatestApplicationAsync(userId);
+        reasonCannotApply = await Applications.GetReasonCannotApplyAsync(userId);
+    }
+
+    private async Task ApplyAsync()
+    {
+        try
+        {
+            await Applications.ApplyAsync(userId, Input.OrganisationName, Input.ContactPhone, Input.Website, Input.Description);
+        }
+        catch (BusinessRuleException ex)
+        {
+            errorMessage = "Error: " + ex.Message;
+            return;
+        }
+
+        // Outside the try: in a page like this a redirect works by throwing an exception, which
+        // the catch above must not swallow. Redirecting after a POST also means refreshing the
+        // page doesn't submit the form again.
+        RedirectManager.RedirectToCurrentPageWithStatus("Your application has been sent. An admin will review it.", HttpContext);
+    }
+}

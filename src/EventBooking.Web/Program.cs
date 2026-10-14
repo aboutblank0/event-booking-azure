@@ -7,6 +7,7 @@ using Azure.Storage.Blobs;
 using EventBooking.Web.Components;
 using EventBooking.Web.Components.Account;
 using EventBooking.Web.Data;
+using EventBooking.Web.Services;
 using EventBooking.Web.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,6 +33,12 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 builder.Services.AddEventBookingIdentity();
+builder.Services.AddEventBookingAuthorization();
+
+// TimeProvider.System is the real clock. Services ask for a TimeProvider instead of reading
+// DateTimeOffset.UtcNow, so tests can give them a fixed time.
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<OrganiserApplicationService>();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 

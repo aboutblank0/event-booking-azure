@@ -1,0 +1,65 @@
+@page "/admin/applications"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using EventBooking.Web.Data
+@using EventBooking.Web.Services
+@using EventBooking.Web.Components.Account
+@using EventBooking.Web.Components.Account.Shared
+
+@attribute [Authorize(Policy = AuthorizationPolicies.ReviewApplications)]
+
+@inject UserManager<ApplicationUser> UserManager
+@inject OrganiserApplicationService Applications
+
+<PageTitle>Organiser applications</PageTitle>
+
+<h1>Organiser applications</h1>
+
+<StatusMessage />
+
+@if (pending is null)
+{
+    <p>Loading...</p>
+}
+else if (pending.Count == 0)
+{
+    <p>No applications are waiting for review.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Organisation</th>
+                <th>Applicant</th>
+                <th>Submitted (UTC)</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in pending)
+            {
+                <tr>
+                    <td>@item.Application.OrganisationName</td>
+                    <td>@item.ApplicantEmail</td>
+                    <td>@item.Application.SubmittedAt.UtcDateTime.ToString("d MMM yyyy HH:mm")</td>
+                    <td><a href="admin/applications/@item.Application.Id">Review</a></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<ApplicationWithApplicant>? pending;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The [Authorize] attribute means there is always a signed-in user here.
+        pending = await Applications.GetPendingApplicationsAsync(UserManager.GetUserId(HttpContext.User)!);
+    }
+}
