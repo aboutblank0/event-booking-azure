@@ -8,6 +8,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 {
     public DbSet<Event> Events => Set<Event>();
     public DbSet<OrganiserApplication> OrganiserApplications => Set<OrganiserApplication>();
+    public DbSet<Booking> Bookings => Set<Booking>();
 
     // Maps the Core classes to tables. Core has no EF attributes, so all database details live here.
     protected override void OnModelCreating(ModelBuilder builder)
@@ -95,6 +96,31 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
             // For listing pending applications, oldest first.
             application.HasIndex(a => new { a.Status, a.SubmittedAt });
+        });
+
+        builder.Entity<Booking>(booking =>
+        {
+            // Restrict: published events are cancelled, never deleted, so bookings always have an event.
+            booking.HasOne<Event>()
+                .WithMany()
+                .HasForeignKey(b => b.EventId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Cascade: deleting an account deletes its bookings, freeing the places.
+            booking.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(b => b.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // At most one Confirmed booking per user per event, even if two requests arrive at once.
+            // Cancelled bookings aren't in the index, so a user can book again after cancelling.
+            booking.HasIndex(b => new { b.EventId, b.UserId }, "IX_Bookings_EventId_UserId_Confirmed")
+                .IsUnique()
+                .HasFilter($"[Status] = {(int)BookingStatus.Confirmed}");
+
+            // For counting an event's bookings and listing a user's bookings.
+            booking.HasIndex(b => new { b.EventId, b.Status });
+            booking.HasIndex(b => b.UserId);
         });
     }
 }
