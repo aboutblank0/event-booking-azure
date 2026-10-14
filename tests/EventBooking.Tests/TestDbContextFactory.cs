@@ -1,13 +1,14 @@
 using EventBooking.Web.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EventBooking.Tests;
 
 internal static class TestDbContextFactory
 {
-    public static ApplicationDbContext Create(string connectionString)
+    public static ApplicationDbContext Create(string connectionString, params IInterceptor[] interceptors)
     {
         // Without this, IdentityDbContext builds the older schema (no passkeys table).
         // Keep in sync with IdentitySetup.
@@ -18,6 +19,7 @@ internal static class TestDbContextFactory
         return new(new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseSqlServer(connectionString)
             .UseApplicationServiceProvider(appServices)
+            .AddInterceptors(interceptors)
             .Options);
     }
 }

@@ -23,17 +23,33 @@ public class EventServiceTests(SqlServerFixture database)
         new(name, "Talks and networking.", startsAt ?? NextWeek, (startsAt ?? NextWeek).AddHours(3),
             "Europe/Lisbon", "Lisbon Congress Centre", "Praça das Indústrias, Lisbon", 38.70, -9.20, 100);
 
-    private async Task<T> WithServiceAsync<T>(Func<EventService, Task<T>> action, DateTimeOffset? now = null)
+    /// <summary>
+    /// Runs <paramref name="action"/> with a service from a fresh scope. <paramref name="beforeSave"/>
+    /// runs just before the service saves, like another request saving first.
+    /// </summary>
+    private async Task<T> WithServiceAsync<T>(Func<EventService, Task<T>> action, DateTimeOffset? now = null,
+        Func<Task>? beforeSave = null)
     {
         await using var services = database.CreateIdentityServices();
         await using var scope = services.CreateAsyncScope();
+        await using var db = TestDbContextFactory.Create(database.ConnectionString,
+            new BeforeSaveInterceptor(beforeSave ?? (() => Task.CompletedTask)));
         var service = ActivatorUtilities.CreateInstance<EventService>(
-            scope.ServiceProvider, _storage, new FixedTimeProvider(now ?? Now));
+            scope.ServiceProvider, db, _storage, new FixedTimeProvider(now ?? Now));
         return await action(service);
     }
 
-    private Task WithServiceAsync(Func<EventService, Task> action) =>
-        WithServiceAsync(async s => { await action(s); return true; });
+    private Task WithServiceAsync(Func<EventService, Task> action, Func<Task>? beforeSave = null) =>
+        WithServiceAsync(async s => { await action(s); return true; }, beforeSave: beforeSave);
+
+    /// <summary>Changes the event from a separate context, as another request would.</summary>
+    private async Task ChangeEventElsewhereAsync(int eventId, Action<Event> change)
+    {
+        await using var db = database.CreateContext();
+        var ev = await db.Events.Include(e => e.Images).SingleAsync(e => e.Id == eventId);
+        change(ev);
+        await db.SaveChangesAsync();
+    }
 
     private Task<Event> CreateEventAsync(string organiserId) =>
         WithServiceAsync(s => s.CreateAsync(organiserId, Details()));
@@ -194,25 +210,6 @@ public class EventServiceTests(SqlServerFixture database)
 
         Assert.Contains("JPEG", ex.Message);
         Assert.Empty((await LoadAsync(ev.Id)).Images);
-    }
-
-    [Fact]
-    public async Task AddImage_SaveFails_DeletesTheUploadedFile()
-    {
-        var organiserId = await database.CreateUserAsync(Roles.Organiser);
-        var ev = await CreateEventAsync(organiserId);
-        // Another upload saves first and takes the same SortOrder, so this save fails.
-        _storage.AfterUpload = async () =>
-        {
-            await using var db = database.CreateContext();
-            var other = await db.Events.Include(e => e.Images).SingleAsync(e => e.Id == ev.Id);
-            other.AddImage("other.jpg");
-            await db.SaveChangesAsync();
-        };
-
-        await Assert.ThrowsAsync<DbUpdateException>(() => AddImageAsync(ev.Id, organiserId));
-
-        Assert.Empty(_storage.Blobs);
     }
 
     [Fact]
@@ -456,5 +453,67 @@ public class EventServiceTests(SqlServerFixture database)
         var organiserId = await database.CreateUserAsync(Roles.Organiser);
 
         await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(s => s.GetEventsForAdminAsync(organiserId)));
+    }
+
+    // ---------- Two requests changing the same event ----------
+
+    [Fact]
+    public async Task Update_AfterAnotherSave_AsksToReloadAndKeepsTheirChange()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreateEventAsync(organiserId);
+
+        var ex = await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(
+            s => s.UpdateAsync(ev.Id, organiserId, Details("Mine")),
+            beforeSave: () => ChangeEventElsewhereAsync(ev.Id, e => e.UpdateDetails("Theirs", "Changed elsewhere."))));
+
+        Assert.Contains("Reload", ex.Message);
+        Assert.Equal("Theirs", (await LoadAsync(ev.Id)).Name);
+    }
+
+    [Fact]
+    public async Task AddImage_AfterAnotherSave_DeletesTheUploadedFile()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreateEventAsync(organiserId);
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(
+            s => s.AddImageAsync(ev.Id, organiserId, new MemoryStream([1, 2, 3])),
+            beforeSave: () => ChangeEventElsewhereAsync(ev.Id, e => e.UpdateDetails("Theirs", "Changed elsewhere."))));
+
+        Assert.Empty(_storage.Blobs);
+        Assert.Empty((await LoadAsync(ev.Id)).Images);
+    }
+
+    [Fact]
+    public async Task AddImage_TwoAtOnce_TheSecondAsksToReload()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreateEventAsync(organiserId);
+
+        // The other upload saves first with the same SortOrder, so the unique index rejects this one.
+        await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(
+            s => s.AddImageAsync(ev.Id, organiserId, new MemoryStream([1, 2, 3])),
+            beforeSave: () => ChangeEventElsewhereAsync(ev.Id, e => e.AddImage("other.jpg"))));
+
+        Assert.Empty(_storage.Blobs);
+        Assert.Equal("other.jpg", Assert.Single((await LoadAsync(ev.Id)).Images).BlobName);
+    }
+
+    [Fact]
+    public async Task RemoveImage_WhileSomeonePublishes_KeepsTheImage()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreateEventAsync(organiserId);
+        var blobName = await AddImageAsync(ev.Id, organiserId);
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(
+            s => s.RemoveImageAsync(ev.Id, organiserId, blobName),
+            beforeSave: () => ChangeEventElsewhereAsync(ev.Id, e => e.Publish(Now))));
+
+        var loaded = await LoadAsync(ev.Id);
+        Assert.Equal(EventStatus.Published, loaded.Status);
+        Assert.Single(loaded.Images);
+        Assert.Contains(blobName, _storage.Blobs);
     }
 }

@@ -2,6 +2,7 @@ using EventBooking.Core;
 using EventBooking.Web.Data;
 using EventBooking.Web.Storage;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace EventBooking.Web.Services;
@@ -103,7 +104,7 @@ public class EventService(
             details.Capacity, timeProvider.GetUtcNow());
 
         db.Events.Add(ev);
-        await db.SaveChangesAsync();
+        await SaveAsync();
         return ev;
     }
 
@@ -120,7 +121,7 @@ public class EventService(
         // TODO: pass the real count of confirmed bookings once bookings exist.
         ev.ChangeCapacity(details.Capacity, confirmedBookings: 0);
 
-        await db.SaveChangesAsync();
+        await SaveAsync();
     }
 
     /// <summary>Uploads an image into the event and returns its new blob name.</summary>
@@ -139,7 +140,8 @@ public class EventService(
         try
         {
             ev.AddImage(blobName);
-            await db.SaveChangesAsync(cancellationToken);
+            MarkEventChanged(ev);
+            await SaveAsync(cancellationToken);
         }
         catch
         {
@@ -157,7 +159,8 @@ public class EventService(
     {
         var ev = await FindOwnEventAsync(eventId, userId);
         ev.RemoveImage(blobName);
-        await db.SaveChangesAsync(cancellationToken);
+        MarkEventChanged(ev);
+        await SaveAsync(cancellationToken);
 
         // Deleted only after the save, so a saved event never refers to a missing file.
         await imageStorage.DeleteAsync(blobName, cancellationToken);
@@ -167,7 +170,7 @@ public class EventService(
     {
         var ev = await FindOwnEventAsync(eventId, userId);
         ev.Publish(timeProvider.GetUtcNow());
-        await db.SaveChangesAsync();
+        await SaveAsync();
     }
 
     /// <summary>
@@ -178,7 +181,7 @@ public class EventService(
         var ev = await FindOwnEventAsync(eventId, userId);
         var blobNames = ev.Images.Select(i => i.BlobName).ToList();
         ev.Delete();
-        await db.SaveChangesAsync(cancellationToken);
+        await SaveAsync(cancellationToken);
 
         foreach (var blobName in blobNames)
             await imageStorage.DeleteAsync(blobName, cancellationToken);
@@ -191,8 +194,36 @@ public class EventService(
             ? await FindEventAsync(eventId)
             : await FindOwnEventAsync(eventId, userId);
         ev.Cancel(timeProvider.GetUtcNow());
-        await db.SaveChangesAsync();
+        await SaveAsync();
     }
+
+    /// <summary>
+    /// Saves, turning a clash with another request into a message. RowVersion makes the save fail
+    /// if the event changed since it was loaded.
+    /// </summary>
+    private async Task SaveAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw ChangedByAnotherRequest();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 })
+        {
+            // 2601 is "duplicate key in a unique index": another upload took the same SortOrder.
+            throw ChangedByAnotherRequest();
+        }
+    }
+
+    // Image rows are separate, so without this an image change wouldn't check the event's RowVersion
+    // (e.g. removing the last image while someone else publishes the event).
+    private void MarkEventChanged(Event ev) => db.Entry(ev).State = EntityState.Modified;
+
+    private static BusinessRuleException ChangedByAnotherRequest() =>
+        new("This event was changed somewhere else at the same time. Reload the page and try again.");
 
     private async Task EnsureActiveOrganiserAsync(string userId)
     {

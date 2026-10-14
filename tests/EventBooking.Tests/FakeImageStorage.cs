@@ -12,20 +12,15 @@ internal class FakeImageStorage : IImageStorage
     /// <summary>When set, uploads fail with this error.</summary>
     public ImageUploadError? FailWith { get; set; }
 
-    /// <summary>Runs after an upload is stored, to change the database mid-request.</summary>
-    public Func<Task>? AfterUpload { get; set; }
-
-    public async Task<ImageUploadResult> UploadAsync(Stream content, CancellationToken cancellationToken)
+    public Task<ImageUploadResult> UploadAsync(Stream content, CancellationToken cancellationToken)
     {
         UploadCount++;
         if (FailWith is { } error)
-            return new(error);
+            return Task.FromResult(new ImageUploadResult(error));
 
         var blobName = $"{Guid.NewGuid():N}.jpg";
         Blobs.Add(blobName);
-        if (AfterUpload is not null)
-            await AfterUpload();
-        return new(ImageUploadError.None, blobName);
+        return Task.FromResult(new ImageUploadResult(ImageUploadError.None, blobName));
     }
 
     public Task DeleteAsync(string blobName, CancellationToken cancellationToken)
