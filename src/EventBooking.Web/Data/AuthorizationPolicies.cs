@@ -9,11 +9,13 @@ namespace EventBooking.Web.Data;
 public static class AuthorizationPolicies
 {
     public const string ReviewApplications = nameof(ReviewApplications);
+    public const string CanCreateEvents = nameof(CanCreateEvents);
 
     public static IServiceCollection AddEventBookingAuthorization(this IServiceCollection services)
     {
         services.AddAuthorizationBuilder()
-            .AddPolicy(ReviewApplications, policy => policy.RequireRole(Roles.Admin));
+            .AddPolicy(ReviewApplications, policy => policy.RequireRole(Roles.Admin))
+            .AddPolicy(CanCreateEvents, policy => policy.RequireRole(Roles.Organiser));
         return services;
     }
 }
