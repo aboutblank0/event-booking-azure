@@ -182,8 +182,8 @@ public class Event
 
     private void SetDetails(string name, string description)
     {
-        Name = RequireText(name, nameof(Name), NameMaxLength);
-        Description = RequireText(description, nameof(Description), DescriptionMaxLength);
+        Name = TextRules.Required(name, nameof(Name), NameMaxLength);
+        Description = TextRules.Required(description, nameof(Description), DescriptionMaxLength);
     }
 
     private void SetSchedule(DateTimeOffset startsAt, DateTimeOffset endsAt, string timeZoneId, DateTimeOffset now)
@@ -209,8 +209,8 @@ public class Event
         if (longitude is not (>= -180 and <= 180))
             throw new BusinessRuleException("Longitude must be between -180 and 180.");
 
-        VenueName = RequireText(venueName, nameof(VenueName), VenueNameMaxLength);
-        Address = RequireText(address, nameof(Address), AddressMaxLength);
+        VenueName = TextRules.Required(venueName, nameof(VenueName), VenueNameMaxLength);
+        Address = TextRules.Required(address, nameof(Address), AddressMaxLength);
         Latitude = latitude;
         Longitude = longitude;
     }
@@ -224,18 +224,6 @@ public class Event
                 $"Capacity can't be lower than the {confirmedBookings} bookings already confirmed.");
 
         Capacity = capacity;
-    }
-
-    private static string RequireText(string value, string fieldName, int maxLength)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new BusinessRuleException($"{fieldName} is required.");
-
-        var trimmed = value.Trim();
-        if (trimmed.Length > maxLength)
-            throw new BusinessRuleException($"{fieldName} can be at most {maxLength} characters.");
-
-        return trimmed;
     }
 
     /// <summary>
