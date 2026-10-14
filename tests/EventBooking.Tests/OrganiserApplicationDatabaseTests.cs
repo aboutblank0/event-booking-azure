@@ -5,8 +5,8 @@ using Microsoft.EntityFrameworkCore;
 namespace EventBooking.Tests;
 
 /// <summary>
-/// Integration tests: save and load organiser applications in a real SQL Server (see
-/// SqlServerFixture). The database is shared, so each test creates its own users.
+/// Saves and loads organiser applications in a real SQL Server. The database is shared, so each
+/// test creates its own users.
 /// </summary>
 [Collection("SqlServer")]
 public class OrganiserApplicationDatabaseTests(SqlServerFixture database)
@@ -100,7 +100,7 @@ public class OrganiserApplicationDatabaseTests(SqlServerFixture database)
     }
 
     [Fact]
-    public async Task Application_SecondPendingApplicationIsRejectedByTheDatabase() // rule 1
+    public async Task Application_SecondPendingApplicationIsRejectedByTheDatabase()
     {
         var userId = await CreateUserAsync();
         await SaveAsync(NewApplication(userId));

@@ -1,9 +1,8 @@
 namespace EventBooking.Core;
 
 /// <summary>
-/// An event that users can book. The rules are described in docs/event-design.md.
-/// All properties have private setters: every change goes through a method, so the rules
-/// are always checked, and there is one place to hook in notifications later.
+/// An event that users can book. Setters are private, so every change goes through a method
+/// that checks the rules.
 /// </summary>
 public class Event
 {
@@ -13,12 +12,10 @@ public class Event
     public const int AddressMaxLength = 500;
     public const int MaxImages = 5;
 
-    // EF Core fills this field directly when loading images; outside code only sees the
-    // read-only Images property, so images can't be added without going through AddImage.
+    // EF Core fills this field directly; outside code must use AddImage.
     private readonly List<EventImage> _images = [];
 
-    // EF Core needs a parameterless constructor to create objects when loading from the
-    // database. It can be private, which forces the rest of the app to use Create().
+    // For EF Core when loading from the database. Private, so the app must use Create().
     private Event() { }
 
     public int Id { get; private set; }
@@ -43,7 +40,7 @@ public class Event
     /// <summary>Not sorted; order by <see cref="EventImage.SortOrder"/> when displaying.</summary>
     public IReadOnlyCollection<EventImage> Images => _images;
 
-    /// <summary>Creates a new Draft event (rule 11).</summary>
+    /// <summary>Creates a new Draft event.</summary>
     public static Event Create(
         string organiserId,
         string name,
@@ -82,7 +79,7 @@ public class Event
         SetDetails(name, description);
     }
 
-    /// <summary>Dates can only change while the event is a Draft (rule 19).</summary>
+    /// <summary>Dates can only change while the event is a Draft.</summary>
     public void ChangeSchedule(DateTimeOffset startsAt, DateTimeOffset endsAt, string timeZoneId, DateTimeOffset now)
     {
         EnsureEditable();
@@ -92,23 +89,20 @@ public class Event
         SetSchedule(startsAt, endsAt, timeZoneId, now);
     }
 
-    /// <summary>The venue can change at any point while the event is editable (rule 21).</summary>
     public void ChangeVenue(string venueName, string address, double latitude, double longitude)
     {
         EnsureEditable();
         SetVenue(venueName, address, latitude, longitude);
     }
 
-    /// <summary>
-    /// Bookings live outside this class, so the caller passes in how many are confirmed (rule 20).
-    /// </summary>
+    /// <summary>Capacity can't go below the number of confirmed bookings.</summary>
     public void ChangeCapacity(int capacity, int confirmedBookings)
     {
         EnsureEditable();
         SetCapacity(capacity, confirmedBookings);
     }
 
-    /// <summary>Adds an image at the end of the display order (rules 9 and 10).</summary>
+    /// <summary>Adds an image at the end of the display order.</summary>
     public void AddImage(string blobName)
     {
         EnsureEditable();
@@ -132,14 +126,13 @@ public class Event
         var image = _images.FirstOrDefault(i => i.BlobName == blobName)
             ?? throw new BusinessRuleException("This image is not part of the event.");
 
-        // A published event must keep at least one image (rule 8).
         if (Status == EventStatus.Published && _images.Count == 1)
             throw new BusinessRuleException("A published event must have at least one image.");
 
         _images.Remove(image);
     }
 
-    /// <summary>Makes the event visible to other users (rules 2, 4, 8 and 12).</summary>
+    /// <summary>Makes the event visible to other users.</summary>
     public void Publish(DateTimeOffset now)
     {
         if (Status != EventStatus.Draft)
@@ -154,7 +147,7 @@ public class Event
         Status = EventStatus.Published;
     }
 
-    /// <summary>Only published events can be cancelled; drafts are deleted instead (rule 12).</summary>
+    /// <summary>Only published events can be cancelled; drafts are deleted instead.</summary>
     public void Cancel(DateTimeOffset now)
     {
         if (Status != EventStatus.Published)
@@ -164,7 +157,7 @@ public class Event
         CancelledAt = now;
     }
 
-    /// <summary>Only drafts can be deleted; nobody can have booked them (rules 12 and 14).</summary>
+    /// <summary>Only drafts can be deleted, since nobody can have booked them.</summary>
     public void Delete()
     {
         if (Status != EventStatus.Draft)
@@ -173,7 +166,6 @@ public class Event
         Status = EventStatus.Deleted;
     }
 
-    // Cancelled and Deleted are final (rule 13).
     private void EnsureEditable()
     {
         if (Status is EventStatus.Cancelled or EventStatus.Deleted)
@@ -202,8 +194,7 @@ public class Event
 
     private void SetVenue(string venueName, string address, double latitude, double longitude)
     {
-        // Written this way (rather than "< -90 || > 90") so NaN is rejected too:
-        // every comparison with NaN is false.
+        // Written this way (not "< -90 || > 90") so NaN is rejected too.
         if (latitude is not (>= -90 and <= 90))
             throw new BusinessRuleException("Latitude must be between -90 and 90.");
         if (longitude is not (>= -180 and <= 180))
@@ -226,10 +217,7 @@ public class Event
         Capacity = capacity;
     }
 
-    /// <summary>
-    /// .NET also accepts Windows time zone names like "GMT Standard Time". HasIanaId is only
-    /// true for IANA names like "Europe/Lisbon", which is what the design requires (rule 7).
-    /// </summary>
+    // Only IANA names like "Europe/Lisbon"; .NET also accepts Windows names like "GMT Standard Time".
     private static bool IsIanaTimeZone(string timeZoneId) =>
         !string.IsNullOrWhiteSpace(timeZoneId)
         && TimeZoneInfo.TryFindSystemTimeZoneById(timeZoneId, out var zone)

@@ -4,10 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EventBooking.Tests;
 
-/// <summary>
-/// Checks the EF Core mapping in ApplicationDbContext. EF can build its model and generate SQL
-/// without connecting, so these run without a database; the connection string is never used.
-/// </summary>
+/// <summary>Checks the EF Core mapping. These don't need a database.</summary>
 public class DatabaseMappingTests
 {
     private static ApplicationDbContext CreateContext() => TestDbContextFactory.Create("Server=unused");
@@ -17,8 +14,7 @@ public class DatabaseMappingTests
     {
         using var db = CreateContext();
 
-        // Compares the model with the latest migration snapshot. If this fails, a mapping or
-        // entity changed without a migration: run `dotnet ef migrations add <Name>`.
+        // If this fails, add a migration: `dotnet ef migrations add <Name>`.
         Assert.False(db.Database.HasPendingModelChanges());
     }
 

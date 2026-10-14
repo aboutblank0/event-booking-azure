@@ -8,8 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace EventBooking.Tests;
 
 /// <summary>
-/// Integration tests for OrganiserApplicationService against a real SQL Server, with the app's
-/// real Identity setup. Each call runs in its own scope, like a separate web request.
+/// Runs the service against a real SQL Server, each call in its own scope like a web request.
 /// The database is shared, so each test creates its own users.
 /// </summary>
 [Collection("SqlServer")]
@@ -85,7 +84,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
         Assert.Equal(loaded.Id, (await WithServiceAsync(s => s.GetLatestApplicationAsync(userId)))!.Id);
     }
 
-    [Theory] // rule 2, with the roles read from the database
+    [Theory]
     [InlineData(Roles.Organiser)]
     [InlineData(Roles.Admin)]
     public async Task Apply_RejectsOrganisersAndAdmins(string role)
@@ -96,7 +95,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     }
 
     [Fact]
-    public async Task Apply_RejectsASecondPendingApplication() // rule 1
+    public async Task Apply_RejectsASecondPendingApplication()
     {
         var userId = await CreateUserAsync();
         await ApplyAsync(userId);
@@ -105,7 +104,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     }
 
     [Fact]
-    public async Task Apply_TwoAtTheSameMoment_OnlyOneIsSaved() // rule 1, the database check
+    public async Task Apply_TwoAtTheSameMoment_OnlyOneIsSaved()
     {
         var userId = await CreateUserAsync();
 
@@ -114,8 +113,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
             Record.ExceptionAsync(() => ApplyAsync(userId)),
             Record.ExceptionAsync(() => ApplyAsync(userId)));
 
-        // Usually one fails in the database (a duplicate in the unique index) and is turned into
-        // the same BusinessRuleException; if one finishes first, the Core check catches the other.
+        // Either the unique index or the Core check rejects the second one.
         Assert.Single(results, e => e is null);
         Assert.Single(results, e => e is BusinessRuleException);
         await using var db = database.CreateContext();
@@ -123,7 +121,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     }
 
     [Fact]
-    public async Task Apply_AfterRejection_WaitsOneMonth() // rule 3
+    public async Task Apply_AfterRejection_WaitsOneMonth()
     {
         var adminId = await CreateUserAsync(Roles.Admin);
         var userId = await CreateUserAsync();
@@ -141,7 +139,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     // ---------- Reviewing ----------
 
     [Fact]
-    public async Task Approve_GivesTheOrganiserRole_WithoutChangingTheSecurityStamp() // rules 4 and 5
+    public async Task Approve_GivesTheOrganiserRole_WithoutChangingTheSecurityStamp()
     {
         var adminId = await CreateUserAsync(Roles.Admin);
         var userId = await CreateUserAsync();
@@ -162,7 +160,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     }
 
     [Fact]
-    public async Task Reject_KeepsTheUserANormalUser() // rules 4 and 6
+    public async Task Reject_KeepsTheUserANormalUser()
     {
         var adminId = await CreateUserAsync(Roles.Admin);
         var userId = await CreateUserAsync();

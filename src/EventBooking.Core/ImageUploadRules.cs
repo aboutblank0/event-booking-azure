@@ -11,10 +11,7 @@ public enum ImageUploadError
 
 public sealed record ImageType(string Extension, string ContentType);
 
-/// <summary>
-/// Rules for accepting an uploaded image. These are pure functions so they can be
-/// unit tested without a web server or Azure.
-/// </summary>
+/// <summary>Rules for accepting an uploaded image.</summary>
 public static class ImageUploadRules
 {
     public const long MaxSizeBytes = 2 * 1024 * 1024; // 2 MB
@@ -27,10 +24,8 @@ public static class ImageUploadRules
     public static readonly ImageType WebP = new("webp", "image/webp");
 
     /// <summary>
-    /// Detects the image type from the file's first bytes (its "magic number").
-    /// The file name and the Content-Type sent by the browser are chosen by the client,
-    /// so they can't be trusted; the bytes themselves are much harder to fake.
-    /// SVG is deliberately not supported because it can contain scripts.
+    /// Detects the image type from the file's first bytes, since the file name and Content-Type
+    /// come from the client and can't be trusted. SVG isn't supported because it can contain scripts.
     /// </summary>
     public static ImageType? DetectType(ReadOnlySpan<byte> header)
     {
@@ -64,10 +59,7 @@ public static class ImageUploadRules
         return type is null ? ImageUploadError.NotAnImage : ImageUploadError.None;
     }
 
-    /// <summary>
-    /// Caps the total number of stored images. With a 2 MB file limit this puts a hard
-    /// ceiling on how much storage (and money) the app can use.
-    /// </summary>
+    /// <summary>Caps the total number of stored images, which limits storage costs.</summary>
     public static bool IsStorageFull(int existingImageCount, int maxImageCount) =>
         existingImageCount >= maxImageCount;
 }

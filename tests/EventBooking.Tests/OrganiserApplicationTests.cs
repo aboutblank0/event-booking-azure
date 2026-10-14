@@ -2,10 +2,6 @@ using EventBooking.Core;
 
 namespace EventBooking.Tests;
 
-/// <summary>
-/// Tests for the rules in docs/roles-design.md ("Organiser applications").
-/// Rule numbers are in the test names' comments.
-/// </summary>
 public class OrganiserApplicationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 14, 12, 0, 0, TimeSpan.Zero);
@@ -98,14 +94,14 @@ public class OrganiserApplicationTests
     }
 
     [Fact]
-    public void Submit_RejectsWhenAnotherApplicationIsPending() // rule 1
+    public void Submit_RejectsWhenAnotherApplicationIsPending()
     {
         var pending = Submit(now: Now.AddDays(-3));
 
         Assert.Throws<BusinessRuleException>(() => Submit(previous: [pending]));
     }
 
-    [Theory] // rule 2
+    [Theory]
     [InlineData(Roles.Organiser)]
     [InlineData(Roles.Admin)]
     public void Submit_RejectsOrganisersAndAdmins(string role)
@@ -114,7 +110,7 @@ public class OrganiserApplicationTests
     }
 
     [Fact]
-    public void Submit_WithinOneMonthOfRejection_IsRejected() // rule 3
+    public void Submit_WithinOneMonthOfRejection_IsRejected()
     {
         var rejected = RejectedOn(Now);
 
@@ -122,7 +118,7 @@ public class OrganiserApplicationTests
     }
 
     [Fact]
-    public void Submit_OneMonthAfterRejection_IsAllowed() // rule 3
+    public void Submit_OneMonthAfterRejection_IsAllowed()
     {
         var rejected = RejectedOn(Now);
 
@@ -132,7 +128,7 @@ public class OrganiserApplicationTests
     }
 
     [Fact]
-    public void CanApplyAgainFrom_IsOneMonthAfterRejection_AndOnlySetForRejections() // rule 3
+    public void CanApplyAgainFrom_IsOneMonthAfterRejection_AndOnlySetForRejections()
     {
         var pending = Submit();
         var approved = Submit();
@@ -144,7 +140,7 @@ public class OrganiserApplicationTests
     }
 
     [Fact]
-    public void Submit_UsesTheLatestRejection() // rule 3
+    public void Submit_UsesTheLatestRejection()
     {
         var older = RejectedOn(Now.AddMonths(-3));
         var latest = RejectedOn(Now.AddDays(-10));
@@ -155,7 +151,7 @@ public class OrganiserApplicationTests
     [Fact]
     public void Submit_AfterApprovalAndRoleRemoved_IsAllowedStraightAway()
     {
-        // From "Removing organisers": a user who lost the role can apply again at once.
+        // A user who lost the role can apply again at once.
         var approved = Submit(now: Now.AddDays(-2));
         approved.Approve("admin-1", Now.AddDays(-1));
 
@@ -164,7 +160,7 @@ public class OrganiserApplicationTests
         Assert.Equal(ApplicationStatus.Pending, application.Status);
     }
 
-    // ---------- Reviewing (rules 4 and 6) ----------
+    // ---------- Reviewing ----------
 
     [Fact]
     public void Approve_Pending_RecordsTheReview()
@@ -192,7 +188,7 @@ public class OrganiserApplicationTests
         Assert.Equal("Please add a website.", application.RejectionReason);
     }
 
-    [Theory] // rule 6
+    [Theory]
     [InlineData(null)]
     [InlineData("   ")]
     public void Reject_WithoutReason_IsAllowed(string? reason)
@@ -225,7 +221,7 @@ public class OrganiserApplicationTests
     }
 
     [Fact]
-    public void Review_OnlyPendingApplicationsCanBeReviewed() // rule 4
+    public void Review_OnlyPendingApplicationsCanBeReviewed()
     {
         var approved = Submit();
         approved.Approve("admin-1", Now);

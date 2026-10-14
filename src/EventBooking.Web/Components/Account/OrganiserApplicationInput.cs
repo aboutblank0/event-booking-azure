@@ -4,9 +4,7 @@ using EventBooking.Core;
 namespace EventBooking.Web.Components.Account;
 
 /// <summary>
-/// The application form fields, shared by the "apply" and "register as organiser" pages.
-/// These attributes give instant messages next to each field; Core checks the same rules again
-/// when the application is created, so the two must agree (they use the same constants).
+/// The organiser application form fields. Core checks the same limits again on submit.
 /// </summary>
 public class OrganiserApplicationInput
 {

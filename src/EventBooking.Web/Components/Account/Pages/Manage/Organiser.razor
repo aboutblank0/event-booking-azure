@@ -14,7 +14,6 @@
 <h3>Become an organiser</h3>
 <StatusMessage Message="@errorMessage" />
 
-@* The latest decision, if the user has applied before (docs/roles-design.md, process step 5). *@
 @if (latest is { Status: ApplicationStatus.Pending })
 {
     <p>Your application for <strong>@latest.OrganisationName</strong> is waiting for review.</p>
@@ -38,10 +37,8 @@ else if (reasonCannotApply is not null && latest?.Status != ApplicationStatus.Pe
 }
 
 @*
-    The form is always rendered, even when the user can't apply. A POST is handled by the form of
-    that name on the freshly loaded page; after a double submit (or from a second open tab) the
-    form would otherwise be missing and Blazor would answer with a bare "400 Bad Request" instead
-    of our error message.
+    Always rendered: Blazor needs the form to exist to handle a POST, or a double submit gets a
+    bare "400 Bad Request" instead of our error message.
 *@
 <div class="row">
     <div class="col-xl-6">
@@ -83,8 +80,7 @@ else if (reasonCannotApply is not null && latest?.Status != ApplicationStatus.Pe
         }
 
         userId = user.Id;
-        // Fine for display: on this kind of page, every click is a new request, and the login
-        // cookie is checked against the database on every request. The service checks again anyway.
+        // Fine for display: this page isn't interactive, so roles are fresh on every request.
         isOrganiser = HttpContext.User.IsInRole(Roles.Organiser);
         latest = await Applications.GetLatestApplicationAsync(userId);
         reasonCannotApply = await Applications.GetReasonCannotApplyAsync(userId);
@@ -102,9 +98,7 @@ else if (reasonCannotApply is not null && latest?.Status != ApplicationStatus.Pe
             return;
         }
 
-        // Outside the try: in a page like this a redirect works by throwing an exception, which
-        // the catch above must not swallow. Redirecting after a POST also means refreshing the
-        // page doesn't submit the form again.
+        // Outside the try, because a redirect works by throwing an exception.
         RedirectManager.RedirectToCurrentPageWithStatus("Your application has been sent. An admin will review it.", HttpContext);
     }
 }

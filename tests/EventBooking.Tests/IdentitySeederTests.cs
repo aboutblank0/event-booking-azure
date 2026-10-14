@@ -7,8 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace EventBooking.Tests;
 
 /// <summary>
-/// Integration tests for the startup seeding in docs/roles-design.md, against a real SQL Server.
-/// The database is shared with other tests, so each test uses its own users.
+/// Startup seeding against a real SQL Server. The database is shared, so each test uses its own users.
 /// </summary>
 [Collection("SqlServer")]
 public class IdentitySeederTests(SqlServerFixture database)
@@ -20,7 +19,7 @@ public class IdentitySeederTests(SqlServerFixture database)
         await scope.ServiceProvider.GetRequiredService<IdentitySeeder>().SeedAsync(adminEmail);
     }
 
-    /// <summary>Registers a user through UserManager, which fills in the normalized email it searches by.</summary>
+    /// <summary>Registers a user through UserManager, so the normalized email is filled in.</summary>
     private async Task<string> CreateUserAsync(bool emailConfirmed = true, string? role = null)
     {
         // Roles must exist before a user can be given one.
@@ -124,7 +123,7 @@ public class IdentitySeederTests(SqlServerFixture database)
     [Fact]
     public async Task Seed_DoesNotPromoteAnOrganiser()
     {
-        // Organiser and Admin don't mix.
+        // A user can't be both an organiser and an admin.
         var email = await CreateUserAsync(role: Roles.Organiser);
 
         await SeedAsync(email);

@@ -1,9 +1,6 @@
 namespace EventBooking.Core;
 
-/// <summary>
-/// The values are written out explicitly because they are stored in the database as ints.
-/// Reordering or inserting a value would silently change what existing rows mean.
-/// </summary>
+// Stored as ints in the database, so never renumber or reorder the values.
 public enum EventStatus
 {
     Draft = 0,
