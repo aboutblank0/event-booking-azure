@@ -6,6 +6,7 @@
 @using EventBooking.Web.Storage
 
 @inject EventService Events
+@inject BookingService Bookings
 @inject ImageUrls ImageUrls
 
 <PageTitle>Upcoming events</PageTitle>
@@ -36,7 +37,9 @@ else
                         @* stretched-link makes the whole card clickable. *@
                         <h2 class="card-title h5"><a href="events/@ev.Id" class="stretched-link">@ev.Name</a></h2>
                         <p class="card-text mb-1">@VenueTime.FormatRange(ev.StartsAt, ev.EndsAt, ev.TimeZoneId)</p>
-                        <p class="card-text text-body-secondary">@ev.VenueName</p>
+                        <p class="card-text text-body-secondary mb-1">@ev.VenueName</p>
+                        @{ var placesLeft = ev.PlacesLeft(booked.GetValueOrDefault(ev.Id)); }
+                        <p class="card-text small">@PlacesText.PlacesLeft(placesLeft)</p>
                     </div>
                 </div>
             </div>
@@ -46,9 +49,11 @@ else
 
 @code {
     private List<Event>? events;
+    private Dictionary<int, int> booked = [];
 
     protected override async Task OnInitializedAsync()
     {
         events = await Events.GetUpcomingEventsAsync();
+        booked = await Bookings.GetConfirmedCountsAsync(events.Select(e => e.Id).ToList());
     }
 }
