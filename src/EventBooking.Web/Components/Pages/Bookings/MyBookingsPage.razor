@@ -1,0 +1,94 @@
+@page "/my-bookings"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using EventBooking.Core
+@using EventBooking.Web.Data
+@using EventBooking.Web.Services
+@using EventBooking.Web.Components.Account
+@using EventBooking.Web.Components.Account.Shared
+
+@attribute [Authorize]
+
+@inject UserManager<ApplicationUser> UserManager
+@inject BookingService Bookings
+@inject TimeProvider TimeProvider
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>My bookings</PageTitle>
+
+<h1>My bookings</h1>
+
+<StatusMessage Message="@errorMessage" />
+
+@*
+    Always rendered: Blazor needs the form to exist to handle a POST, or a change made
+    meanwhile gets a bare "400 Bad Request" instead of our error message.
+*@
+<form method="post" @formname="cancel-booking" @onsubmit="CancelAsync">
+    <AntiforgeryToken />
+    @if (bookings is null)
+    {
+        <p>Loading...</p>
+    }
+    else
+    {
+        <h2 class="h4 mt-4">Upcoming</h2>
+        @if (bookings.Upcoming.Count == 0)
+        {
+            <p>You have no upcoming bookings. <a href="events">Browse events</a></p>
+        }
+        else
+        {
+            <BookingList Bookings="bookings.Upcoming" Now="now" />
+        }
+
+        <h2 class="h4 mt-4">Past</h2>
+        @if (bookings.Past.Count == 0)
+        {
+            <p>No past bookings yet.</p>
+        }
+        else
+        {
+            <BookingList Bookings="bookings.Past" Now="now" />
+        }
+    }
+</form>
+
+@code {
+    private string userId = "";
+    private MyBookings? bookings;
+    private DateTimeOffset now;
+    private string? errorMessage;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "cancel-booking")]
+    private int? BookingId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The [Authorize] attribute means there is always a signed-in user here.
+        userId = UserManager.GetUserId(HttpContext.User)!;
+        now = TimeProvider.GetUtcNow();
+        bookings = await Bookings.GetMyBookingsAsync(userId);
+    }
+
+    private async Task CancelAsync()
+    {
+        try
+        {
+            if (BookingId is not { } bookingId)
+                throw new BusinessRuleException("Choose a booking to cancel.");
+            await Bookings.CancelAsync(bookingId, userId);
+        }
+        catch (BusinessRuleException ex)
+        {
+            errorMessage = "Error: " + ex.Message;
+            return;
+        }
+
+        RedirectManager.RedirectToWithStatus("my-bookings", "Your booking has been cancelled.", HttpContext);
+    }
+}

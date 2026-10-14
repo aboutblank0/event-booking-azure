@@ -1,0 +1,49 @@
+@using EventBooking.Core
+@using EventBooking.Web.Services
+
+@* Must be placed inside the page's cancel form, so its Cancel buttons submit it. *@
+<ul class="list-group mb-3">
+    @foreach (var item in Bookings)
+    {
+        var ev = item.Event;
+        <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+                @if (item.IsEventHidden || ev.Status == EventStatus.Cancelled)
+                {
+                    @* No link: hidden and cancelled events have no details page for attendees. *@
+                    <div class="fw-bold">@ev.Name</div>
+                }
+                else
+                {
+                    <a href="events/@ev.Id" class="fw-bold">@ev.Name</a>
+                }
+                <div>@VenueTime.FormatRange(ev.StartsAt, ev.EndsAt, ev.TimeZoneId)</div>
+                <div class="text-body-secondary small">@ev.VenueName</div>
+
+                @if (ev.Status == EventStatus.Cancelled)
+                {
+                    <div class="text-danger fw-bold">This event has been cancelled and won't take place.</div>
+                }
+                else if (item.IsEventHidden)
+                {
+                    <div class="text-warning-emphasis">This event is currently unavailable.</div>
+                }
+            </div>
+
+            @if (ev.Status == EventStatus.Published && ev.StartsAt > Now)
+            {
+                @* The clicked button sends its value as BookingId. *@
+                <button type="submit" name="BookingId" value="@item.Booking.Id" class="btn btn-sm btn-outline-danger"
+                        onclick="return confirm('Cancel your booking?')">Cancel booking</button>
+            }
+        </li>
+    }
+</ul>
+
+@code {
+    [Parameter, EditorRequired]
+    public List<MyBooking> Bookings { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public DateTimeOffset Now { get; set; }
+}
