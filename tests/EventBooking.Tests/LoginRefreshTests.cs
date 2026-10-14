@@ -7,10 +7,8 @@ using Microsoft.Extensions.Options;
 namespace EventBooking.Tests;
 
 /// <summary>
-/// How role changes reach a signed-in user (docs/roles-design.md, technical notes). On each request
-/// Identity's cookie check calls ValidateSecurityStampAsync with the user from the cookie: if it
-/// returns the user, the cookie is rebuilt with CreateUserPrincipalAsync; if it returns null, the
-/// user is signed out. These tests call the same two methods directly, against a real SQL Server.
+/// How role changes reach a signed-in user. Each request, Identity calls ValidateSecurityStampAsync:
+/// a user means the cookie is rebuilt with CreateUserPrincipalAsync, null means sign out.
 /// </summary>
 [Collection("SqlServer")]
 public class LoginRefreshTests(SqlServerFixture database)

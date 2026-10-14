@@ -16,10 +16,7 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-@*
-    Creates the account and the organiser application in one step (docs/roles-design.md).
-    The account part works like Register.razor; keep the two in step.
-*@
+@* Creates the account and the organiser application in one step. Keep in step with Register.razor. *@
 
 <PageTitle>Register as an organiser</PageTitle>
 
@@ -89,9 +86,7 @@
 
         Logger.LogInformation("User created a new account with password, applying to be an organiser.");
 
-        // A brand-new user has no roles and no earlier applications, and the form already checked
-        // the fields, so this shouldn't fail. If it somehow does, the account still exists, so
-        // tell the user and let them apply again from their account page.
+        // Shouldn't fail for a new user. If it does, the account still exists, so they can apply later.
         string? applicationError = null;
         try
         {
@@ -104,7 +99,7 @@
                 "You can apply from your account page once you've signed in.";
         }
 
-        // From here on, the same as Register.razor (RequireConfirmedAccount is on in IdentitySetup).
+        // From here on, the same as Register.razor.
         var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
         code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
         var callbackUrl = NavigationManager.GetUriWithQueryParameters(

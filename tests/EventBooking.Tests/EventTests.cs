@@ -2,13 +2,12 @@ using EventBooking.Core;
 
 namespace EventBooking.Tests;
 
-/// <summary>Tests for the rules in docs/event-design.md. Rule numbers are in the test names' comments.</summary>
 public class EventTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset NextWeek = Now.AddDays(7);
 
-    /// <summary>A valid draft event. Tests override only the argument they care about.</summary>
+    /// <summary>A valid draft event. Tests override only what they care about.</summary>
     private static Event CreateEvent(
         string name = "Tech Meetup",
         string description = "Talks and pizza.",
@@ -41,7 +40,7 @@ public class EventTests
         return ev;
     }
 
-    // ---------- Creating (rules 1, 3-7, 11) ----------
+    // ---------- Creating ----------
 
     [Fact]
     public void Create_ValidEvent_IsDraftWithAllValuesSet()
@@ -96,26 +95,26 @@ public class EventTests
     }
 
     [Fact]
-    public void Create_RejectsEndAtOrBeforeStart() // rule 3
+    public void Create_RejectsEndAtOrBeforeStart()
     {
         Assert.Throws<BusinessRuleException>(() => CreateEvent(startsAt: NextWeek, endsAt: NextWeek));
         Assert.Throws<BusinessRuleException>(() => CreateEvent(startsAt: NextWeek, endsAt: NextWeek.AddMinutes(-1)));
     }
 
     [Fact]
-    public void Create_RejectsStartInThePast() // rule 4
+    public void Create_RejectsStartInThePast()
     {
         Assert.Throws<BusinessRuleException>(() => CreateEvent(startsAt: Now.AddMinutes(-1)));
     }
 
     [Fact]
-    public void Create_RejectsZeroOrNegativeCapacity() // rule 5
+    public void Create_RejectsZeroOrNegativeCapacity()
     {
         Assert.Throws<BusinessRuleException>(() => CreateEvent(capacity: 0));
         Assert.Throws<BusinessRuleException>(() => CreateEvent(capacity: -1));
     }
 
-    [Theory] // rule 6
+    [Theory]
     [InlineData(-90.0, -180.0)]
     [InlineData(90.0, 180.0)]
     public void Create_AcceptsCoordinatesAtTheLimits(double latitude, double longitude)
@@ -123,7 +122,7 @@ public class EventTests
         CreateEvent(latitude: latitude, longitude: longitude);
     }
 
-    [Theory] // rule 6
+    [Theory]
     [InlineData(-90.1, 0.0)]
     [InlineData(90.1, 0.0)]
     [InlineData(0.0, -180.1)]
@@ -135,7 +134,7 @@ public class EventTests
         Assert.Throws<BusinessRuleException>(() => CreateEvent(latitude: latitude, longitude: longitude));
     }
 
-    [Theory] // rule 7
+    [Theory]
     [InlineData("")]
     [InlineData("Not/AZone")]
     [InlineData("GMT Standard Time")] // a Windows name, not IANA
@@ -144,10 +143,10 @@ public class EventTests
         Assert.Throws<BusinessRuleException>(() => CreateEvent(timeZoneId: timeZoneId));
     }
 
-    // ---------- Images (rules 8-10) ----------
+    // ---------- Images ----------
 
     [Fact]
-    public void AddImage_GivesEachImageAHigherSortOrder() // rule 10
+    public void AddImage_GivesEachImageAHigherSortOrder()
     {
         var ev = CreateEvent();
 
@@ -163,7 +162,7 @@ public class EventTests
     }
 
     [Fact]
-    public void AddImage_AllowsFiveImages_RejectsSixth() // rule 9
+    public void AddImage_AllowsFiveImages_RejectsSixth()
     {
         var ev = CreateEvent();
         for (var i = 1; i <= Event.MaxImages; i++)
@@ -203,14 +202,14 @@ public class EventTests
     }
 
     [Fact]
-    public void RemoveImage_PublishedEventMustKeepOneImage() // rule 8
+    public void RemoveImage_PublishedEventMustKeepOneImage()
     {
         var ev = CreatePublishedEvent();
 
         Assert.Throws<BusinessRuleException>(() => ev.RemoveImage("cover.jpg"));
     }
 
-    // ---------- Publishing (rules 2, 4, 8, 12) ----------
+    // ---------- Publishing ----------
 
     [Fact]
     public void Publish_DraftWithImage_BecomesPublished()
@@ -221,7 +220,7 @@ public class EventTests
     }
 
     [Fact]
-    public void Publish_RejectsEventWithoutImages() // rule 8
+    public void Publish_RejectsEventWithoutImages()
     {
         var ev = CreateEvent();
 
@@ -229,7 +228,7 @@ public class EventTests
     }
 
     [Fact]
-    public void Publish_AllowsStartExactlyOneYearAway_RejectsLater() // rule 2
+    public void Publish_AllowsStartExactlyOneYearAway_RejectsLater()
     {
         var oneYear = CreateEvent(startsAt: Now.AddYears(1));
         oneYear.AddImage("a.jpg");
@@ -239,12 +238,12 @@ public class EventTests
         tooFar.AddImage("a.jpg");
         Assert.Throws<BusinessRuleException>(() => tooFar.Publish(Now));
 
-        // Creating a draft that far ahead is fine; it can be published once within a year.
+        // A draft can be created that far ahead, just not published.
         tooFar.Publish(Now.AddDays(1));
     }
 
     [Fact]
-    public void Publish_RejectsDraftWhoseStartHasPassed() // rule 4
+    public void Publish_RejectsDraftWhoseStartHasPassed()
     {
         var ev = CreateEvent(startsAt: NextWeek);
         ev.AddImage("a.jpg");
@@ -253,13 +252,13 @@ public class EventTests
     }
 
     [Fact]
-    public void Publish_RejectsEventThatIsNotDraft() // rule 12
+    public void Publish_RejectsEventThatIsNotDraft()
     {
         Assert.Throws<BusinessRuleException>(() => CreatePublishedEvent().Publish(Now));
         Assert.Throws<BusinessRuleException>(() => CreateCancelledEvent().Publish(Now));
     }
 
-    // ---------- Cancelling and deleting (rules 12-14) ----------
+    // ---------- Cancelling and deleting ----------
 
     [Fact]
     public void Cancel_PublishedEvent_SetsStatusAndCancelledAt()
@@ -290,13 +289,13 @@ public class EventTests
     }
 
     [Fact]
-    public void Delete_RejectsPublishedEvent() // rule 14
+    public void Delete_RejectsPublishedEvent()
     {
         Assert.Throws<BusinessRuleException>(() => CreatePublishedEvent().Delete());
     }
 
     [Fact]
-    public void CancelledAndDeletedEvents_CannotBeChanged() // rule 13
+    public void CancelledAndDeletedEvents_CannotBeChanged()
     {
         var deleted = CreateEvent();
         deleted.Delete();
@@ -312,7 +311,7 @@ public class EventTests
         }
     }
 
-    // ---------- Permissions (rule 17) ----------
+    // ---------- Permissions ----------
 
     [Fact]
     public void IsOrganisedBy_OnlyTrueForTheOrganiser()
@@ -323,7 +322,7 @@ public class EventTests
         Assert.False(ev.IsOrganisedBy("someone-else"));
     }
 
-    // ---------- Editing (rules 19-21) ----------
+    // ---------- Editing ----------
 
     [Fact]
     public void ChangeSchedule_AllowedWhileDraft()
@@ -346,7 +345,7 @@ public class EventTests
     }
 
     [Fact]
-    public void ChangeSchedule_RejectedOncePublished() // rule 19
+    public void ChangeSchedule_RejectedOncePublished()
     {
         var ev = CreatePublishedEvent();
 
@@ -355,7 +354,7 @@ public class EventTests
     }
 
     [Fact]
-    public void ChangeCapacity_CannotGoBelowConfirmedBookings() // rule 20
+    public void ChangeCapacity_CannotGoBelowConfirmedBookings()
     {
         var ev = CreatePublishedEvent();
 
@@ -366,7 +365,7 @@ public class EventTests
     }
 
     [Fact]
-    public void ChangeVenue_AllowedOncePublished() // rule 21
+    public void ChangeVenue_AllowedOncePublished()
     {
         var ev = CreatePublishedEvent();
 

@@ -6,14 +6,12 @@ using Testcontainers.MsSql;
 namespace EventBooking.Tests;
 
 /// <summary>
-/// Starts a throwaway SQL Server in Docker and applies the app's real migrations to it.
-/// xUnit creates this once and shares it between all test classes in the "SqlServer"
-/// collection, so the container (which takes a few seconds to start) starts only once.
-/// It's removed when the tests finish.
+/// Starts a throwaway SQL Server in Docker and applies the migrations. xUnit shares one instance
+/// between all test classes in the "SqlServer" collection.
 /// </summary>
 public class SqlServerFixture : IAsyncLifetime
 {
-    // A fixed version (not "latest") so test runs don't change when Microsoft publishes a new image.
+    // A fixed version, so test runs don't change when a new image is published.
     private readonly MsSqlContainer _container =
         new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04").Build();
 
@@ -21,7 +19,7 @@ public class SqlServerFixture : IAsyncLifetime
     {
         await _container.StartAsync();
 
-        // Running the migrations (not EnsureCreated) means the migrations themselves are tested too.
+        // Migrate (not EnsureCreated), so the migrations are tested too.
         await using var db = CreateContext();
         await db.Database.MigrateAsync();
     }
@@ -29,16 +27,14 @@ public class SqlServerFixture : IAsyncLifetime
     public Task DisposeAsync() => _container.DisposeAsync().AsTask();
 
     /// <summary>
-    /// A new context each time, like each web request gets its own. Tests use separate contexts
-    /// for saving and loading so they read from the database, not from EF's in-memory cache.
+    /// A new context each time. Use separate ones for saving and loading, so loads hit the database.
     /// </summary>
     public ApplicationDbContext CreateContext() => TestDbContextFactory.Create(ConnectionString);
 
     public string ConnectionString => _container.GetConnectionString();
 
     /// <summary>
-    /// The app's Identity services (the same method Program.cs calls), pointed at this database.
-    /// The web host normally adds logging, data protection and authentication, so this adds them too.
+    /// The app's Identity services, pointed at this database, plus what the web host normally adds.
     /// </summary>
     public ServiceProvider CreateIdentityServices()
     {

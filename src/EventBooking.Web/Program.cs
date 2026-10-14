@@ -35,17 +35,14 @@ builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 builder.Services.AddEventBookingIdentity();
 builder.Services.AddEventBookingAuthorization();
 
-// TimeProvider.System is the real clock. Services ask for a TimeProvider instead of reading
-// DateTimeOffset.UtcNow, so tests can give them a fixed time.
+// Services use TimeProvider instead of DateTimeOffset.UtcNow, so tests can fix the time.
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<OrganiserApplicationService>();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
-// Azure Blob Storage for event images. There is no key or connection string: the app signs in
-// with an Entra ID identity instead. Locally that's your `az login` user; on Azure it's the
-// App Service's managed identity. (DefaultAzureCredential would try both, but it first probes
-// for a managed identity, which can hang on machines outside Azure, so we choose explicitly.)
+// Blob Storage signs in without keys: as the `az login` user locally, and with the App Service's
+// managed identity on Azure. (DefaultAzureCredential can hang outside Azure, so choose explicitly.)
 TokenCredential azureCredential = builder.Environment.IsDevelopment()
     ? new AzureCliCredential()
     : new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned);
@@ -59,14 +56,12 @@ builder.Services.AddStorageRateLimiting();
 
 var app = builder.Build();
 
-// Apply any pending EF Core migrations at startup so the database schema matches the code.
-// DbContext is a scoped service, so we create a scope to resolve it outside of a request.
+// Apply pending migrations at startup. DbContext is scoped, so it needs a scope outside a request.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
 
-    // Needs the tables from the migrations, so it runs after them.
     // Admin:Email comes from user secrets locally and App Service settings on Azure.
     await scope.ServiceProvider.GetRequiredService<IdentitySeeder>()
         .SeedAsync(app.Configuration["Admin:Email"]);

@@ -9,9 +9,8 @@ internal static class TestDbContextFactory
 {
     public static ApplicationDbContext Create(string connectionString)
     {
-        // IdentityDbContext reads the Identity schema version from the app's services. Without
-        // this it would build the older schema (no passkeys table) and not match the migrations.
-        // Keep in sync with AddIdentityCore in Program.cs.
+        // Without this, IdentityDbContext builds the older schema (no passkeys table).
+        // Keep in sync with IdentitySetup.
         var appServices = new ServiceCollection()
             .Configure<IdentityOptions>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
             .BuildServiceProvider();

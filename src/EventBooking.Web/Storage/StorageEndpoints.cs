@@ -8,18 +8,13 @@ public static class StorageEndpoints
 {
     public const string RateLimitPolicy = "storage";
 
-    /// <summary>
-    /// Limits each signed-in user to a fixed number of storage requests per hour, so nobody
-    /// can run up the bill (or fill the image cap) by sending requests in a loop.
-    /// Requests over the limit get HTTP 429 Too Many Requests.
-    /// </summary>
+    /// <summary>Limits each user to 20 storage requests per hour, to protect against runaway costs.</summary>
     public static IServiceCollection AddStorageRateLimiting(this IServiceCollection services) =>
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.AddPolicy(RateLimitPolicy, context =>
                 RateLimitPartition.GetFixedWindowLimiter(
-                    // One "bucket" per user name; the endpoints require login, so this is set.
                     partitionKey: context.User.Identity?.Name ?? "anonymous",
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
@@ -43,8 +38,7 @@ public static class StorageEndpoints
                 maxImageCount = storage.MaxImageCount,
             }));
 
-        // Because this endpoint binds an IFormFile, ASP.NET Core automatically validates the
-        // antiforgery token, which protects signed-in users against cross-site request forgery.
+        // Binding an IFormFile makes ASP.NET Core check the antiforgery token automatically.
         group.MapPost("/images", async (IFormFile file, ImageStorage storage, CancellationToken ct) =>
             {
                 var result = await storage.UploadAsync(file, ct);
@@ -58,8 +52,7 @@ public static class StorageEndpoints
                     _ => Results.BadRequest(),
                 };
             })
-            // Reject oversized requests before the body is read. The extra 64 KB leaves room
-            // for the multipart form overhead around the 2 MB file.
+            // Reject oversized requests early. The extra 64 KB is for the multipart form overhead.
             .WithMetadata(new RequestSizeLimitAttribute(ImageUploadRules.MaxSizeBytes + 64 * 1024));
 
         return endpoints;

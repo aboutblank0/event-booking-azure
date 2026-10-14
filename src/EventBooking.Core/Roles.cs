@@ -1,8 +1,7 @@
 namespace EventBooking.Core;
 
 /// <summary>
-/// The stored roles from docs/roles-design.md. A normal user has no role. The names are saved in
-/// the AspNetRoles table, so renaming one would disconnect users from the role they already have.
+/// Normal users have no role. The names are stored in the database, so don't rename them.
 /// </summary>
 public static class Roles
 {

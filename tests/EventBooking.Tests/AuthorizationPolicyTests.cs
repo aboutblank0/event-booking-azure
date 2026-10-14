@@ -7,8 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace EventBooking.Tests;
 
 /// <summary>
-/// Checks the named policies pages use, with the same registration Program.cs calls.
-/// A ClaimsPrincipal is what the login cookie turns into on each request; here it's built by hand.
+/// Checks the named policies. A ClaimsPrincipal (normally built from the login cookie) is built by hand.
 /// </summary>
 public class AuthorizationPolicyTests
 {

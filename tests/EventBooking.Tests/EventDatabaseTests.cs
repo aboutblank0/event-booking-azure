@@ -5,10 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace EventBooking.Tests;
 
 /// <summary>
-/// Integration tests: save and load events in a real SQL Server (see SqlServerFixture).
-/// They check what the mapping tests can't, e.g. that EF can load an Event through its
-/// private constructor and that rowversion really blocks a stale save.
-/// The database is shared, so each test creates its own organiser and events.
+/// Saves and loads events in a real SQL Server. The database is shared, so each test creates its own data.
 /// </summary>
 [Collection("SqlServer")]
 public class EventDatabaseTests(SqlServerFixture database)
@@ -50,7 +47,7 @@ public class EventDatabaseTests(SqlServerFixture database)
         var id = await SaveAsync(ev);
 
         await using var db = database.CreateContext();
-        // Include tells EF to load the images in the same query; they aren't loaded by default.
+        // Images aren't loaded unless included.
         var loaded = await db.Events.Include(e => e.Images).SingleAsync(e => e.Id == id);
 
         Assert.Equal(organiserId, loaded.OrganiserId);
@@ -99,11 +96,11 @@ public class EventDatabaseTests(SqlServerFixture database)
         var firstCopy = await first.Events.SingleAsync(e => e.Id == id);
         var secondCopy = await second.Events.SingleAsync(e => e.Id == id);
 
-        // The first save changes the row, so SQL Server gives it a new RowVersion...
+        // The first save gives the row a new RowVersion...
         firstCopy.ChangeCapacity(50, confirmedBookings: 0);
         await first.SaveChangesAsync();
 
-        // ...and the second save, still holding the old RowVersion, is rejected.
+        // ...so the second save, holding the old one, is rejected.
         secondCopy.ChangeCapacity(200, confirmedBookings: 0);
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync());
 
@@ -128,7 +125,7 @@ public class EventDatabaseTests(SqlServerFixture database)
     {
         var ev = NewEvent("no-such-user");
 
-        // The foreign key to AspNetUsers rejects it, whatever the code does.
+        // The foreign key rejects it.
         await Assert.ThrowsAsync<DbUpdateException>(() => SaveAsync(ev));
     }
 

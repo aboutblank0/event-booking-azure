@@ -10,8 +10,7 @@
 
 <p>JPEG, PNG or WebP, up to 2 MB.</p>
 
-@* A plain HTML form posting to the /api/images endpoint. AntiforgeryToken adds a hidden
-   token field that the endpoint checks, so other sites can't submit this form for you. *@
+@* AntiforgeryToken adds a hidden field the endpoint checks, so other sites can't submit this form. *@
 <form method="post" action="api/images" enctype="multipart/form-data">
     <AntiforgeryToken />
     <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required class="form-control mb-3" />

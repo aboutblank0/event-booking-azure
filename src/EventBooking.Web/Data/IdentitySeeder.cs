@@ -4,8 +4,7 @@ using Microsoft.AspNetCore.Identity;
 namespace EventBooking.Web.Data;
 
 /// <summary>
-/// Runs at startup to make sure the roles exist and the admin from configuration has the Admin
-/// role. Safe to run every time: it only adds what's missing.
+/// Creates the roles and gives the configured admin the Admin role. Safe to run on every startup.
 /// </summary>
 public class IdentitySeeder(
     RoleManager<IdentityRole> roleManager,
@@ -26,8 +25,7 @@ public class IdentitySeeder(
         await SeedAdminAsync(adminEmail);
     }
 
-    // Skipped cases are logged rather than thrown: the app still works without an admin, and
-    // the log explains why there isn't one.
+    // Logs rather than throws: the app still works without an admin.
     private async Task SeedAdminAsync(string? adminEmail)
     {
         if (string.IsNullOrWhiteSpace(adminEmail))
@@ -39,8 +37,7 @@ public class IdentitySeeder(
         var user = await userManager.FindByEmailAsync(adminEmail);
         if (user is null)
         {
-            // The admin registers like anyone else; the next startup gives them the role.
-            logger.LogWarning("No user is registered with the Admin:Email address yet, so no admin was seeded.");
+                logger.LogWarning("No user is registered with the Admin:Email address yet, so no admin was seeded.");
             return;
         }
 
@@ -55,7 +52,7 @@ public class IdentitySeeder(
             return;
         }
 
-        // Organiser and Admin don't mix (docs/roles-design.md).
+        // A user can't be both an organiser and an admin.
         if (await userManager.IsInRoleAsync(user, Roles.Organiser))
         {
             logger.LogWarning("The Admin:Email user is an organiser, so they weren't made an admin.");
@@ -66,8 +63,7 @@ public class IdentitySeeder(
         logger.LogInformation("Gave the Admin role to the Admin:Email user.");
     }
 
-    // Identity methods report failure through IdentityResult instead of throwing, so a failed
-    // seed would otherwise go unnoticed. Failing startup makes the problem obvious.
+    // Identity reports failures in IdentityResult instead of throwing, so check it explicitly.
     private static void EnsureSucceeded(IdentityResult result)
     {
         if (!result.Succeeded)
