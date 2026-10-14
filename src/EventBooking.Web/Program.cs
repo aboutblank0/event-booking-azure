@@ -36,11 +36,15 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
         options.SignIn.RequireConfirmedAccount = true;
         options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
     })
+    // Turns on role support (RoleManager, roles in the login cookie). IdentityRole is the
+    // built-in role class, stored in the AspNetRoles table.
+    .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+builder.Services.AddScoped<IdentitySeeder>();
 
 // Azure Blob Storage for event images. There is no key or connection string: the app signs in
 // with an Entra ID identity instead. Locally that's your `az login` user; on Azure it's the
@@ -65,6 +69,9 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
+
+    // Needs the tables from the migrations, so it runs after them.
+    await scope.ServiceProvider.GetRequiredService<IdentitySeeder>().SeedAsync();
 }
 
 // Configure the HTTP request pipeline.

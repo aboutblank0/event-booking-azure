@@ -31,7 +31,9 @@ public class SqlServerFixture : IAsyncLifetime
     /// A new context each time, like each web request gets its own. Tests use separate contexts
     /// for saving and loading so they read from the database, not from EF's in-memory cache.
     /// </summary>
-    public ApplicationDbContext CreateContext() => TestDbContextFactory.Create(_container.GetConnectionString());
+    public ApplicationDbContext CreateContext() => TestDbContextFactory.Create(ConnectionString);
+
+    public string ConnectionString => _container.GetConnectionString();
 }
 
 [CollectionDefinition("SqlServer")]
