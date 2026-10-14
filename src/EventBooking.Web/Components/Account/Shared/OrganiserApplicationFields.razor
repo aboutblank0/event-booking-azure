@@ -1,0 +1,32 @@
+@*
+    The application form fields, placed inside a page's EditForm.
+    Each field's form name comes from its expression, e.g. "Input.OrganisationName". The page's
+    [SupplyParameterFromForm] property must therefore also be called Input, or the posted
+    values won't reach it.
+*@
+
+<div class="form-floating mb-3">
+    <InputText @bind-Value="Input.OrganisationName" id="Input.OrganisationName" class="form-control" aria-required="true" placeholder="Organisation name" />
+    <label for="Input.OrganisationName">Organisation name</label>
+    <ValidationMessage For="() => Input.OrganisationName" class="text-danger" />
+</div>
+<div class="form-floating mb-3">
+    <InputText type="tel" @bind-Value="Input.ContactPhone" id="Input.ContactPhone" class="form-control" autocomplete="tel" aria-required="true" placeholder="Contact phone" />
+    <label for="Input.ContactPhone">Contact phone</label>
+    <ValidationMessage For="() => Input.ContactPhone" class="text-danger" />
+</div>
+<div class="form-floating mb-3">
+    <InputText type="url" @bind-Value="Input.Website" id="Input.Website" class="form-control" autocomplete="url" placeholder="Website" />
+    <label for="Input.Website">Website (optional)</label>
+    <ValidationMessage For="() => Input.Website" class="text-danger" />
+</div>
+<div class="form-floating mb-3">
+    <InputTextArea @bind-Value="Input.Description" id="Input.Description" class="form-control" style="height: 8rem" placeholder="Why you're applying" />
+    <label for="Input.Description">Why you're applying (optional)</label>
+    <ValidationMessage For="() => Input.Description" class="text-danger" />
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public OrganiserApplicationInput Input { get; set; } = default!;
+}
