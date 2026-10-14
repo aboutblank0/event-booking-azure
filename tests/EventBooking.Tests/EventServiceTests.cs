@@ -23,12 +23,12 @@ public class EventServiceTests(SqlServerFixture database)
         new(name, "Talks and networking.", startsAt ?? NextWeek, (startsAt ?? NextWeek).AddHours(3),
             "Europe/Lisbon", "Lisbon Congress Centre", "Praça das Indústrias, Lisbon", 38.70, -9.20, 100);
 
-    private async Task<T> WithServiceAsync<T>(Func<EventService, Task<T>> action)
+    private async Task<T> WithServiceAsync<T>(Func<EventService, Task<T>> action, DateTimeOffset? now = null)
     {
         await using var services = database.CreateIdentityServices();
         await using var scope = services.CreateAsyncScope();
         var service = ActivatorUtilities.CreateInstance<EventService>(
-            scope.ServiceProvider, _storage, new FixedTimeProvider(Now));
+            scope.ServiceProvider, _storage, new FixedTimeProvider(now ?? Now));
         return await action(service);
     }
 
@@ -306,5 +306,155 @@ public class EventServiceTests(SqlServerFixture database)
         Assert.Empty(loaded.Images);
         Assert.Empty(_storage.Blobs);
         await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(s => s.UpdateAsync(ev.Id, organiserId, Details())));
+    }
+
+    // ---------- Who sees which events ----------
+
+    private Task LockOutAsync(string userId) =>
+        ChangeUserAsync(userId, (m, u) => m.SetLockoutEndDateAsync(u, DateTimeOffset.MaxValue));
+
+    private Task RemoveOrganiserRoleAsync(string userId) =>
+        ChangeUserAsync(userId, (m, u) => m.RemoveFromRoleAsync(u, Roles.Organiser));
+
+    private async Task<List<int>> UpcomingIdsAsync(DateTimeOffset? now = null) =>
+        (await WithServiceAsync(s => s.GetUpcomingEventsAsync(), now)).Select(e => e.Id).ToList();
+
+    [Fact]
+    public async Task Upcoming_ShowsOnlyPublishedEventsThatHaventEnded()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var published = await CreatePublishedEventAsync(organiserId);
+        var draft = await CreateEventAsync(organiserId);
+        var cancelled = await CreatePublishedEventAsync(organiserId);
+        await WithServiceAsync(s => s.CancelAsync(cancelled.Id, organiserId));
+
+        var ids = await UpcomingIdsAsync();
+
+        Assert.Contains(published.Id, ids);
+        Assert.DoesNotContain(draft.Id, ids);
+        Assert.DoesNotContain(cancelled.Id, ids);
+        Assert.DoesNotContain(published.Id, await UpcomingIdsAsync(published.EndsAt));
+    }
+
+    [Fact]
+    public async Task Upcoming_HidesEventsOfLockedOrRemovedOrganisers()
+    {
+        var lockedId = await database.CreateUserAsync(Roles.Organiser);
+        var removedId = await database.CreateUserAsync(Roles.Organiser);
+        var ofLocked = await CreatePublishedEventAsync(lockedId);
+        var ofRemoved = await CreatePublishedEventAsync(removedId);
+
+        await LockOutAsync(lockedId);
+        await RemoveOrganiserRoleAsync(removedId);
+
+        var ids = await UpcomingIdsAsync();
+        Assert.DoesNotContain(ofLocked.Id, ids);
+        Assert.DoesNotContain(ofRemoved.Id, ids);
+    }
+
+    [Fact]
+    public async Task Upcoming_ShowsTheEventsAgainOnceTheRoleIsBack()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreatePublishedEventAsync(organiserId);
+        await RemoveOrganiserRoleAsync(organiserId);
+
+        await ChangeUserAsync(organiserId, (m, u) => m.AddToRoleAsync(u, Roles.Organiser));
+
+        Assert.Contains(ev.Id, await UpcomingIdsAsync());
+    }
+
+    [Fact]
+    public async Task GetEvent_DraftsAreSeenOnlyByTheirOrganiser()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var draft = await CreateEventAsync(organiserId);
+        var otherOrganiserId = await database.CreateUserAsync(Roles.Organiser);
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+
+        Assert.NotNull(await WithServiceAsync(s => s.GetEventAsync(draft.Id, organiserId)));
+        Assert.Null(await WithServiceAsync(s => s.GetEventAsync(draft.Id, null)));
+        Assert.Null(await WithServiceAsync(s => s.GetEventAsync(draft.Id, otherOrganiserId)));
+        Assert.Null(await WithServiceAsync(s => s.GetEventAsync(draft.Id, adminId)));
+    }
+
+    [Fact]
+    public async Task GetEvent_PublishedIsSeenByVisitors()
+    {
+        var ev = await CreatePublishedEventAsync(await database.CreateUserAsync(Roles.Organiser));
+
+        var loaded = await WithServiceAsync(s => s.GetEventAsync(ev.Id, null));
+
+        Assert.NotNull(loaded);
+        Assert.Single(loaded.Images);
+    }
+
+    [Fact]
+    public async Task GetEvent_HiddenIsSeenOnlyByAdmins()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreatePublishedEventAsync(organiserId);
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+        await LockOutAsync(organiserId);
+
+        Assert.Null(await WithServiceAsync(s => s.GetEventAsync(ev.Id, null)));
+        Assert.Null(await WithServiceAsync(s => s.GetEventAsync(ev.Id, organiserId)));
+        Assert.NotNull(await WithServiceAsync(s => s.GetEventAsync(ev.Id, adminId)));
+    }
+
+    [Fact]
+    public async Task GetEvent_CancelledIsSeenByItsOrganiserAndAdmins()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreatePublishedEventAsync(organiserId);
+        await WithServiceAsync(s => s.CancelAsync(ev.Id, organiserId));
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+
+        Assert.NotNull(await WithServiceAsync(s => s.GetEventAsync(ev.Id, organiserId)));
+        Assert.NotNull(await WithServiceAsync(s => s.GetEventAsync(ev.Id, adminId)));
+        Assert.Null(await WithServiceAsync(s => s.GetEventAsync(ev.Id, null)));
+    }
+
+    [Fact]
+    public async Task GetMyEvents_ReturnsOwnEventsExceptDeleted()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var draft = await CreateEventAsync(organiserId);
+        var published = await CreatePublishedEventAsync(organiserId);
+        var deleted = await CreateEventAsync(organiserId);
+        await WithServiceAsync(s => s.DeleteAsync(deleted.Id, organiserId));
+        await CreateEventAsync(await database.CreateUserAsync(Roles.Organiser));
+
+        var mine = await WithServiceAsync(s => s.GetMyEventsAsync(organiserId));
+
+        Assert.Equal([draft.Id, published.Id], mine.Select(e => e.Id).Order());
+    }
+
+    [Fact]
+    public async Task GetEventsForAdmin_IncludesHiddenEventsButNotDrafts()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var visible = await CreatePublishedEventAsync(organiserId);
+        var draft = await CreateEventAsync(organiserId);
+        var lockedId = await database.CreateUserAsync(Roles.Organiser);
+        var hidden = await CreatePublishedEventAsync(lockedId);
+        await LockOutAsync(lockedId);
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+
+        var events = await WithServiceAsync(s => s.GetEventsForAdminAsync(adminId));
+
+        Assert.False(Assert.Single(events, e => e.Event.Id == visible.Id).IsHidden);
+        var hiddenRow = Assert.Single(events, e => e.Event.Id == hidden.Id);
+        Assert.True(hiddenRow.IsHidden);
+        Assert.EndsWith("@example.com", hiddenRow.OrganiserEmail);
+        Assert.DoesNotContain(events, e => e.Event.Id == draft.Id);
+    }
+
+    [Fact]
+    public async Task GetEventsForAdmin_RejectsNonAdmins()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(s => s.GetEventsForAdminAsync(organiserId)));
     }
 }
