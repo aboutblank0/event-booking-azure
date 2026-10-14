@@ -301,6 +301,17 @@ public class EventTests
     }
 
     [Fact]
+    public void Delete_RemovesTheImages()
+    {
+        var ev = CreateEvent();
+        ev.AddImage("a.jpg");
+
+        ev.Delete();
+
+        Assert.Empty(ev.Images);
+    }
+
+    [Fact]
     public void Delete_RejectsPublishedEvent()
     {
         Assert.Throws<BusinessRuleException>(() => CreatePublishedEvent().Delete());

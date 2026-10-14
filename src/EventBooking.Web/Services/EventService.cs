@@ -107,12 +107,18 @@ public class EventService(
         await db.SaveChangesAsync();
     }
 
-    /// <summary>Deletes a draft. It stays in the database, but no query returns it again.</summary>
-    public async Task DeleteAsync(int eventId, string userId)
+    /// <summary>
+    /// Deletes a draft and its images. The event stays in the database, but no query returns it again.
+    /// </summary>
+    public async Task DeleteAsync(int eventId, string userId, CancellationToken cancellationToken = default)
     {
         var ev = await FindOwnEventAsync(eventId, userId);
+        var blobNames = ev.Images.Select(i => i.BlobName).ToList();
         ev.Delete();
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken);
+
+        foreach (var blobName in blobNames)
+            await imageStorage.DeleteAsync(blobName, cancellationToken);
     }
 
     private async Task EnsureActiveOrganiserAsync(string userId)

@@ -237,14 +237,19 @@ public class EventServiceTests(SqlServerFixture database)
     }
 
     [Fact]
-    public async Task Delete_HidesTheDraftFromLaterChanges()
+    public async Task Delete_RemovesTheImagesAndHidesTheDraft()
     {
         var organiserId = await database.CreateUserAsync(Roles.Organiser);
         var ev = await CreateEventAsync(organiserId);
+        await AddImageAsync(ev.Id, organiserId);
+        await AddImageAsync(ev.Id, organiserId);
 
         await WithServiceAsync(s => s.DeleteAsync(ev.Id, organiserId));
 
-        Assert.Equal(EventStatus.Deleted, (await LoadAsync(ev.Id)).Status);
+        var loaded = await LoadAsync(ev.Id);
+        Assert.Equal(EventStatus.Deleted, loaded.Status);
+        Assert.Empty(loaded.Images);
+        Assert.Empty(_storage.Blobs);
         await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(s => s.UpdateAsync(ev.Id, organiserId, Details())));
     }
 }

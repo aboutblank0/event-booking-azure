@@ -163,13 +163,17 @@ public class Event
         CancelledAt = now;
     }
 
-    /// <summary>Only drafts can be deleted, since nobody can have booked them.</summary>
+    /// <summary>
+    /// Only drafts can be deleted, since nobody can have booked them. Their images are removed too,
+    /// so the caller should delete the image files after saving.
+    /// </summary>
     public void Delete()
     {
         if (Status != EventStatus.Draft)
             throw new BusinessRuleException("Only a draft event can be deleted. Cancel it instead.");
 
         Status = EventStatus.Deleted;
+        _images.Clear();
     }
 
     private void EnsureEditable()
