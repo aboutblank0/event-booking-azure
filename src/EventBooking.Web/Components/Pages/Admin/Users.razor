@@ -1,0 +1,88 @@
+@page "/admin/users"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using EventBooking.Web.Data
+@using EventBooking.Web.Services
+@using EventBooking.Web.Components.Account.Shared
+
+@attribute [Authorize(Policy = AuthorizationPolicies.ManageUsers)]
+
+@inject UserManager<ApplicationUser> UserManager
+@inject UserAdminService UserAdmin
+
+<PageTitle>Users</PageTitle>
+
+<h1>Users</h1>
+
+<StatusMessage />
+
+@* A GET form: the search ends up in the address (?search=...), so results can be bookmarked. *@
+<form method="get" class="row g-2 mb-3" style="max-width: 32rem">
+    <div class="col">
+        <input type="search" name="search" value="@Search" class="form-control" placeholder="Search by email" aria-label="Search by email" />
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-primary">Search</button>
+    </div>
+</form>
+
+@if (users is null)
+{
+    <p>Loading...</p>
+}
+else if (users.Count == 0)
+{
+    <p>No users found.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Roles</th>
+                    <th>Account</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in users)
+                {
+                    <tr>
+                        <td>@user.Email</td>
+                        <td><UserRoleBadges User="user" /></td>
+                        <td>
+                            @if (user.IsLocked)
+                            {
+                                <span class="badge text-bg-danger">Locked</span>
+                            }
+                        </td>
+                        <td><a href="admin/users/@user.Id">Manage</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    @if (users.Count == UserAdminService.MaxListedUsers)
+    {
+        <p class="text-body-secondary small">Showing the first @UserAdminService.MaxListedUsers users. Search to find others.</p>
+    }
+}
+
+@code {
+    private List<UserForAdmin>? users;
+
+    [SupplyParameterFromQuery]
+    private string? Search { get; set; }
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The [Authorize] attribute means there is always a signed-in user here.
+        users = await UserAdmin.GetUsersAsync(UserManager.GetUserId(HttpContext.User)!, Search);
+    }
+}

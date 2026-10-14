@@ -1,0 +1,19 @@
+@using EventBooking.Web.Services
+
+@if (User.IsAdmin)
+{
+    <span class="badge text-bg-primary">Admin</span>
+}
+@if (User.IsOrganiser)
+{
+    <span class="badge text-bg-info">Organiser</span>
+}
+@if (!User.IsAdmin && !User.IsOrganiser)
+{
+    <span class="text-body-secondary">User</span>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public UserForAdmin User { get; set; } = default!;
+}
