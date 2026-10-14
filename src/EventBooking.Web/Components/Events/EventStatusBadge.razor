@@ -1,0 +1,15 @@
+@using EventBooking.Core
+
+<span class="badge @CssClass">@Status</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public EventStatus Status { get; set; }
+
+    private string CssClass => Status switch
+    {
+        EventStatus.Published => "text-bg-success",
+        EventStatus.Cancelled => "text-bg-danger",
+        _ => "text-bg-secondary",
+    };
+}

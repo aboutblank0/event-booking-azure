@@ -1,0 +1,108 @@
+@using EventBooking.Web.Services
+
+@*
+    The event form fields, placed inside a page's EditForm. The page's
+    [SupplyParameterFromForm] property must be called Input to match the field names.
+*@
+
+<div class="form-floating mb-3">
+    <InputText @bind-Value="Input.Name" id="Input.Name" class="form-control" aria-required="true" placeholder="Name" />
+    <label for="Input.Name">Name</label>
+    <ValidationMessage For="() => Input.Name" class="text-danger" />
+</div>
+<div class="form-floating mb-3">
+    <InputTextArea @bind-Value="Input.Description" id="Input.Description" class="form-control" style="height: 10rem" aria-required="true" placeholder="Description" />
+    <label for="Input.Description">Description</label>
+    <ValidationMessage For="() => Input.Description" class="text-danger" />
+</div>
+
+<h2 class="h5 mt-4">When</h2>
+@if (ScheduleLocked)
+{
+    <p class="text-body-secondary small">The date and time can't be changed once the event is published.</p>
+}
+<div class="row g-3 mb-3">
+    <div class="col-md-6 col-xxl-4">
+        <div class="form-floating">
+            @* readonly fields are still posted with the form; disabled ones wouldn't be. *@
+            <InputDate Type="InputDateType.DateTimeLocal" @bind-Value="Input.StartsAt" id="Input.StartsAt" class="form-control" readonly="@ScheduleLocked" aria-required="true" />
+            <label for="Input.StartsAt">Starts (venue time)</label>
+        </div>
+        <ValidationMessage For="() => Input.StartsAt" class="text-danger" />
+    </div>
+    <div class="col-md-6 col-xxl-4">
+        <div class="form-floating">
+            <InputDate Type="InputDateType.DateTimeLocal" @bind-Value="Input.EndsAt" id="Input.EndsAt" class="form-control" readonly="@ScheduleLocked" aria-required="true" />
+            <label for="Input.EndsAt">Ends (venue time)</label>
+        </div>
+        <ValidationMessage For="() => Input.EndsAt" class="text-danger" />
+    </div>
+    <div class="col-xxl-4">
+        <div class="form-floating">
+            @if (ScheduleLocked)
+            {
+                <InputText @bind-Value="Input.TimeZoneId" id="Input.TimeZoneId" class="form-control" readonly />
+            }
+            else
+            {
+                <InputSelect @bind-Value="Input.TimeZoneId" id="Input.TimeZoneId" class="form-select" aria-required="true">
+                    @foreach (var timeZoneId in VenueTime.TimeZoneIds)
+                    {
+                        <option value="@timeZoneId">@timeZoneId</option>
+                    }
+                </InputSelect>
+            }
+            <label for="Input.TimeZoneId">Time zone of the venue</label>
+        </div>
+        <ValidationMessage For="() => Input.TimeZoneId" class="text-danger" />
+    </div>
+</div>
+
+<h2 class="h5 mt-4">Where</h2>
+<div class="form-floating mb-3">
+    <InputText @bind-Value="Input.VenueName" id="Input.VenueName" class="form-control" aria-required="true" placeholder="Venue name" />
+    <label for="Input.VenueName">Venue name</label>
+    <ValidationMessage For="() => Input.VenueName" class="text-danger" />
+</div>
+<div class="form-floating mb-3">
+    <InputText @bind-Value="Input.Address" id="Input.Address" class="form-control" aria-required="true" placeholder="Address" />
+    <label for="Input.Address">Address</label>
+    <ValidationMessage For="() => Input.Address" class="text-danger" />
+</div>
+<div class="row g-3 mb-3">
+    <div class="col-sm-6">
+        <div class="form-floating">
+            @* step="any" allows decimals; the browser only accepts whole numbers otherwise. *@
+            <InputNumber @bind-Value="Input.Latitude" id="Input.Latitude" class="form-control" step="any" aria-required="true" placeholder="Latitude" />
+            <label for="Input.Latitude">Latitude</label>
+        </div>
+        <ValidationMessage For="() => Input.Latitude" class="text-danger" />
+    </div>
+    <div class="col-sm-6">
+        <div class="form-floating">
+            <InputNumber @bind-Value="Input.Longitude" id="Input.Longitude" class="form-control" step="any" aria-required="true" placeholder="Longitude" />
+            <label for="Input.Longitude">Longitude</label>
+        </div>
+        <ValidationMessage For="() => Input.Longitude" class="text-danger" />
+    </div>
+</div>
+
+<h2 class="h5 mt-4">Capacity</h2>
+<div class="row mb-4">
+    <div class="col-sm-6">
+        <div class="form-floating">
+            <InputNumber @bind-Value="Input.Capacity" id="Input.Capacity" class="form-control" min="1" aria-required="true" placeholder="Capacity" />
+            <label for="Input.Capacity">Maximum number of attendees</label>
+        </div>
+        <ValidationMessage For="() => Input.Capacity" class="text-danger" />
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public EventInput Input { get; set; } = default!;
+
+    /// <summary>True once the event is published: the schedule is shown but can't be edited.</summary>
+    [Parameter]
+    public bool ScheduleLocked { get; set; }
+}

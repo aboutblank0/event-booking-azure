@@ -1,0 +1,65 @@
+@page "/my-events/new"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using EventBooking.Core
+@using EventBooking.Web.Data
+@using EventBooking.Web.Services
+@using EventBooking.Web.Components.Account
+@using EventBooking.Web.Components.Account.Shared
+
+@attribute [Authorize(Policy = AuthorizationPolicies.CanCreateEvents)]
+
+@inject UserManager<ApplicationUser> UserManager
+@inject EventService Events
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Create event</PageTitle>
+
+<h1>Create event</h1>
+
+<div class="row">
+    <div class="col-xl-8">
+        <p>The event is saved as a draft that only you can see. Add images and publish it on the next page.</p>
+        <StatusMessage Message="@errorMessage" />
+        <EditForm Model="Input" method="post" OnValidSubmit="CreateAsync" FormName="create-event">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" role="alert" />
+            <EventFields Input="Input" />
+            <button type="submit" class="btn btn-primary">Save draft</button>
+            <a href="my-events" class="btn btn-link">Cancel</a>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private string? errorMessage;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private EventInput Input { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+    }
+
+    private async Task CreateAsync()
+    {
+        Event ev;
+        try
+        {
+            ev = await Events.CreateAsync(UserManager.GetUserId(HttpContext.User)!, Input.ToDetails());
+        }
+        catch (BusinessRuleException ex)
+        {
+            errorMessage = "Error: " + ex.Message;
+            return;
+        }
+
+        RedirectManager.RedirectToWithStatus($"my-events/{ev.Id}",
+            "Draft saved. Add at least one image, then publish it.", HttpContext);
+    }
+}
