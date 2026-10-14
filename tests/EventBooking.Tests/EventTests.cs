@@ -173,6 +173,18 @@ public class EventTests
     }
 
     [Fact]
+    public void EnsureCanAddImage_RejectsFullOrCancelledEvents()
+    {
+        var full = CreateEvent();
+        for (var i = 1; i <= 5; i++)
+            full.AddImage($"{i}.jpg");
+
+        CreateEvent().EnsureCanAddImage();
+        Assert.Throws<BusinessRuleException>(() => full.EnsureCanAddImage());
+        Assert.Throws<BusinessRuleException>(() => CreateCancelledEvent().EnsureCanAddImage());
+    }
+
+    [Fact]
     public void AddImage_RejectsDuplicateOrBlankBlobName()
     {
         var ev = CreateEvent();
@@ -286,6 +298,17 @@ public class EventTests
         ev.Delete();
 
         Assert.Equal(EventStatus.Deleted, ev.Status);
+    }
+
+    [Fact]
+    public void Delete_RemovesTheImages()
+    {
+        var ev = CreateEvent();
+        ev.AddImage("a.jpg");
+
+        ev.Delete();
+
+        Assert.Empty(ev.Images);
     }
 
     [Fact]

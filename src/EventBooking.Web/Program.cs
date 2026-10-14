@@ -38,6 +38,7 @@ builder.Services.AddEventBookingAuthorization();
 // Services use TimeProvider instead of DateTimeOffset.UtcNow, so tests can fix the time.
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<OrganiserApplicationService>();
+builder.Services.AddScoped<EventService>();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
@@ -52,6 +53,7 @@ var maxImageCount = builder.Configuration.GetValue<int>("Storage:MaxImageCount")
 builder.Services.AddSingleton(new BlobServiceClient(new Uri(blobEndpoint), azureCredential));
 builder.Services.AddSingleton(sp => new ImageStorage(
     sp.GetRequiredService<BlobServiceClient>().GetBlobContainerClient(imagesContainer), maxImageCount));
+builder.Services.AddSingleton<IImageStorage>(sp => sp.GetRequiredService<ImageStorage>());
 builder.Services.AddStorageRateLimiting();
 
 var app = builder.Build();

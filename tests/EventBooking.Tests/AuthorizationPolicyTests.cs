@@ -28,4 +28,12 @@ public class AuthorizationPolicyTests
         Assert.False(await IsAllowedAsync(AuthorizationPolicies.ReviewApplications, Roles.Organiser));
         Assert.False(await IsAllowedAsync(AuthorizationPolicies.ReviewApplications));
     }
+
+    [Fact]
+    public async Task CanCreateEvents_OnlyOrganisers()
+    {
+        Assert.True(await IsAllowedAsync(AuthorizationPolicies.CanCreateEvents, Roles.Organiser));
+        Assert.False(await IsAllowedAsync(AuthorizationPolicies.CanCreateEvents, Roles.Admin));
+        Assert.False(await IsAllowedAsync(AuthorizationPolicies.CanCreateEvents));
+    }
 }

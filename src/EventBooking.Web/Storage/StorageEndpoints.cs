@@ -1,6 +1,4 @@
 using System.Threading.RateLimiting;
-using EventBooking.Core;
-using Microsoft.AspNetCore.Mvc;
 
 namespace EventBooking.Web.Storage;
 
@@ -37,23 +35,6 @@ public static class StorageEndpoints
                 imageCount = await storage.CountAsync(ct),
                 maxImageCount = storage.MaxImageCount,
             }));
-
-        // Binding an IFormFile makes ASP.NET Core check the antiforgery token automatically.
-        group.MapPost("/images", async (IFormFile file, ImageStorage storage, CancellationToken ct) =>
-            {
-                var result = await storage.UploadAsync(file, ct);
-                return result.Error switch
-                {
-                    ImageUploadError.None => Results.Ok(new { name = result.BlobName }),
-                    ImageUploadError.Empty => Results.BadRequest("The file is empty."),
-                    ImageUploadError.TooLarge => Results.BadRequest("Images must be 2 MB or smaller."),
-                    ImageUploadError.NotAnImage => Results.BadRequest("Only JPEG, PNG and WebP images are allowed."),
-                    ImageUploadError.StorageFull => Results.BadRequest("The image storage limit has been reached."),
-                    _ => Results.BadRequest(),
-                };
-            })
-            // Reject oversized requests early. The extra 64 KB is for the multipart form overhead.
-            .WithMetadata(new RequestSizeLimitAttribute(ImageUploadRules.MaxSizeBytes + 64 * 1024));
 
         return endpoints;
     }

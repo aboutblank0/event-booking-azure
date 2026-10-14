@@ -1,4 +1,5 @@
 using EventBooking.Web.Data;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.MsSql;
@@ -45,6 +46,24 @@ public class SqlServerFixture : IAsyncLifetime
         services.AddDbContext<ApplicationDbContext>(o => o.UseSqlServer(ConnectionString));
         services.AddEventBookingIdentity();
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Creates a user with a unique email, optionally in a role. The database is shared, so each
+    /// test creates its own users.
+    /// </summary>
+    public async Task<string> CreateUserAsync(string? role = null)
+    {
+        await using var services = CreateIdentityServices();
+        await using var scope = services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IdentitySeeder>().SeedAsync(null);
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var email = $"{Guid.NewGuid()}@example.com";
+        var user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true };
+        Assert.True((await userManager.CreateAsync(user)).Succeeded);
+        if (role is not null)
+            Assert.True((await userManager.AddToRoleAsync(user, role)).Succeeded);
+        return user.Id;
     }
 }
 
