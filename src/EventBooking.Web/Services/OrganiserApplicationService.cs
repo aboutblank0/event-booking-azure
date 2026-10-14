@@ -13,6 +13,9 @@ namespace EventBooking.Web.Services;
 /// signed-in user: an interactive page keeps the roles it loaded with (see the design's
 /// technical notes). Broken rules are reported as <see cref="BusinessRuleException"/>.
 /// </summary>
+/// <summary>An application with its applicant's email, for the admin pages.</summary>
+public record ApplicationWithApplicant(OrganiserApplication Application, string? ApplicantEmail);
+
 public class OrganiserApplicationService(
     ApplicationDbContext db,
     UserManager<ApplicationUser> userManager,
@@ -58,6 +61,25 @@ public class OrganiserApplicationService(
         }
 
         return application;
+    }
+
+    /// <summary>Pending applications, oldest first, for admins to review.</summary>
+    public async Task<List<ApplicationWithApplicant>> GetPendingApplicationsAsync(string adminId)
+    {
+        await EnsureAdminAsync(adminId);
+        // Sorted before the email is joined in: EF can't sort by a property of the record.
+        var pending = db.OrganiserApplications
+            .Where(a => a.Status == ApplicationStatus.Pending)
+            .OrderBy(a => a.SubmittedAt);
+        return await WithApplicant(pending).ToListAsync();
+    }
+
+    /// <summary>One application of any status, or null if it doesn't exist. Admins only.</summary>
+    public async Task<ApplicationWithApplicant?> GetApplicationAsync(int applicationId, string adminId)
+    {
+        await EnsureAdminAsync(adminId);
+        return await WithApplicant(db.OrganiserApplications.Where(a => a.Id == applicationId))
+            .SingleOrDefaultAsync();
     }
 
     /// <summary>Approves the application and gives the applicant the Organiser role (rules 4 and 5).</summary>
@@ -106,11 +128,16 @@ public class OrganiserApplicationService(
         }
     }
 
+    // OrganiserApplication has no ApplicationUser property (Core can't know about Identity), so
+    // the email is joined in by UserId. EF turns this into one SQL query with an INNER JOIN.
+    private IQueryable<ApplicationWithApplicant> WithApplicant(IQueryable<OrganiserApplication> applications) =>
+        applications.Join(db.Users, a => a.UserId, u => u.Id, (a, u) => new ApplicationWithApplicant(a, u.Email));
+
     private async Task EnsureAdminAsync(string userId)
     {
         var user = await userManager.FindByIdAsync(userId);
         if (user is null || !await userManager.IsInRoleAsync(user, Roles.Admin))
-            throw new BusinessRuleException("Only admins can review applications.");
+            throw new BusinessRuleException("Only admins can see and review applications.");
     }
 
     private async Task<ApplicationUser> FindUserAsync(string userId) =>

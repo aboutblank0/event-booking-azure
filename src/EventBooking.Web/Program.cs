@@ -33,6 +33,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 builder.Services.AddEventBookingIdentity();
+builder.Services.AddEventBookingAuthorization();
 
 // TimeProvider.System is the real clock. Services ask for a TimeProvider instead of reading
 // DateTimeOffset.UtcNow, so tests can give them a fixed time.

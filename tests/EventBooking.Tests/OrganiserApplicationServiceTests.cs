@@ -176,6 +176,40 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
         Assert.Empty((await GetUserStateAsync(userId)).Roles);
     }
 
+    [Fact]
+    public async Task GetPending_ListsPendingApplicationsWithTheApplicantsEmail()
+    {
+        var adminId = await CreateUserAsync(Roles.Admin);
+        var userId = await CreateUserAsync();
+        var pending = await ApplyAsync(userId);
+        var older = await ApplyAsync(await CreateUserAsync(), Now.AddDays(-1));
+        var rejected = await ApplyAsync(await CreateUserAsync());
+        await WithServiceAsync(s => s.RejectAsync(rejected.Id, adminId, null));
+
+        var list = await WithServiceAsync(s => s.GetPendingApplicationsAsync(adminId));
+
+        var item = Assert.Single(list, x => x.Application.Id == pending.Id);
+        await using (var db = database.CreateContext())
+        {
+            Assert.Equal((await db.Users.SingleAsync(u => u.Id == userId)).Email, item.ApplicantEmail);
+        }
+        Assert.DoesNotContain(list, x => x.Application.Id == rejected.Id);
+        // Oldest first. The database is shared, so only the order of this test's two is checked.
+        Assert.Equal([older.Id, pending.Id],
+            list.Select(x => x.Application.Id).Where(id => id == older.Id || id == pending.Id));
+        Assert.Equal(rejected.Id, (await WithServiceAsync(s => s.GetApplicationAsync(rejected.Id, adminId)))!.Application.Id);
+    }
+
+    [Fact]
+    public async Task GetApplications_OnlyAdmins()
+    {
+        var notAdminId = await CreateUserAsync();
+        var application = await ApplyAsync(notAdminId);
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(s => s.GetPendingApplicationsAsync(notAdminId)));
+        await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(s => s.GetApplicationAsync(application.Id, notAdminId)));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(Roles.Organiser)]
