@@ -1,0 +1,54 @@
+@page "/"
+@page "/events"
+
+@using EventBooking.Core
+@using EventBooking.Web.Services
+@using EventBooking.Web.Storage
+
+@inject EventService Events
+@inject ImageUrls ImageUrls
+
+<PageTitle>Upcoming events</PageTitle>
+
+<h1>Upcoming events</h1>
+
+@if (events is null)
+{
+    <p>Loading...</p>
+}
+else if (events.Count == 0)
+{
+    <p>There are no upcoming events yet. Check back soon.</p>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4 mb-4">
+        @foreach (var ev in events)
+        {
+            var cover = ev.Images.MinBy(i => i.SortOrder);
+            <div class="col">
+                <div class="card h-100">
+                    @if (cover is not null)
+                    {
+                        <img src="@ImageUrls.For(cover.BlobName)" class="card-img-top event-card-image" alt="" />
+                    }
+                    <div class="card-body">
+                        @* stretched-link makes the whole card clickable. *@
+                        <h2 class="card-title h5"><a href="events/@ev.Id" class="stretched-link">@ev.Name</a></h2>
+                        <p class="card-text mb-1">@VenueTime.FormatRange(ev.StartsAt, ev.EndsAt, ev.TimeZoneId)</p>
+                        <p class="card-text text-body-secondary">@ev.VenueName</p>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<Event>? events;
+
+    protected override async Task OnInitializedAsync()
+    {
+        events = await Events.GetUpcomingEventsAsync();
+    }
+}
