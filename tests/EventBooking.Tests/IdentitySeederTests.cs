@@ -13,23 +13,9 @@ namespace EventBooking.Tests;
 [Collection("SqlServer")]
 public class IdentitySeederTests(SqlServerFixture database)
 {
-    /// <summary>
-    /// The app's Identity services (the same method Program.cs calls), pointed at the test database.
-    /// Logging and data protection are normally added by the web host, so the test adds them itself.
-    /// </summary>
-    private ServiceProvider CreateServices()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddDataProtection();
-        services.AddDbContext<ApplicationDbContext>(o => o.UseSqlServer(database.ConnectionString));
-        services.AddEventBookingIdentity();
-        return services.BuildServiceProvider();
-    }
-
     private async Task SeedAsync(string? adminEmail = null)
     {
-        await using var services = CreateServices();
+        await using var services = database.CreateIdentityServices();
         await using var scope = services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<IdentitySeeder>().SeedAsync(adminEmail);
     }
@@ -41,7 +27,7 @@ public class IdentitySeederTests(SqlServerFixture database)
         await SeedAsync();
 
         var email = $"{Guid.NewGuid()}@example.com";
-        await using var services = CreateServices();
+        await using var services = database.CreateIdentityServices();
         await using var scope = services.CreateAsyncScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = emailConfirmed };
@@ -55,7 +41,7 @@ public class IdentitySeederTests(SqlServerFixture database)
 
     private async Task<IList<string>> GetRolesAsync(string email)
     {
-        await using var services = CreateServices();
+        await using var services = database.CreateIdentityServices();
         await using var scope = services.CreateAsyncScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         return await userManager.GetRolesAsync((await userManager.FindByEmailAsync(email))!);

@@ -22,6 +22,12 @@ public static class IdentitySetup
             .AddSignInManager()
             .AddDefaultTokenProviders();
 
+        // On every request, check the login cookie against the database (default: every 30 minutes).
+        // If the user's security stamp still matches, the cookie is rebuilt with their current roles,
+        // so a new role applies on their next page load without signing in again. If the stamp changed
+        // (role removed, account locked), they're signed out. Costs a couple of small queries per request.
+        services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.Zero);
+
         services.AddScoped<IdentitySeeder>();
         return services;
     }
