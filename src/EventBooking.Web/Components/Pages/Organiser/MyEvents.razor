@@ -1,0 +1,79 @@
+@page "/my-events"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using EventBooking.Core
+@using EventBooking.Web.Data
+@using EventBooking.Web.Services
+@using EventBooking.Web.Components.Account.Shared
+
+@attribute [Authorize(Policy = AuthorizationPolicies.CanCreateEvents)]
+
+@inject UserManager<ApplicationUser> UserManager
+@inject EventService Events
+
+<PageTitle>My events</PageTitle>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h1 class="mb-0">My events</h1>
+    <a href="my-events/new" class="btn btn-primary">Create event</a>
+</div>
+
+<StatusMessage Message="@errorMessage" />
+
+@if (events is null)
+{
+    <p>Loading...</p>
+}
+else if (events.Count == 0)
+{
+    <p>You haven't created any events yet.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>When (venue time)</th>
+                    <th>Status</th>
+                    <th>Images</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var ev in events)
+                {
+                    <tr>
+                        <td><a href="my-events/@ev.Id">@ev.Name</a></td>
+                        <td>@VenueTime.FormatRange(ev.StartsAt, ev.EndsAt, ev.TimeZoneId)</td>
+                        <td><EventStatusBadge Status="ev.Status" /></td>
+                        <td>@ev.Images.Count / @Event.MaxImages</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<Event>? events;
+    private string? errorMessage;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // The [Authorize] attribute means there is always a signed-in user here.
+            events = await Events.GetMyEventsAsync(UserManager.GetUserId(HttpContext.User)!);
+        }
+        catch (BusinessRuleException ex)
+        {
+            events = [];
+            errorMessage = "Error: " + ex.Message;
+        }
+    }
+}

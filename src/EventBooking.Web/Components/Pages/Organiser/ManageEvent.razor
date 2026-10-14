@@ -1,0 +1,209 @@
+@page "/my-events/{Id:int}"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using EventBooking.Core
+@using EventBooking.Web.Data
+@using EventBooking.Web.Services
+@using EventBooking.Web.Storage
+@using EventBooking.Web.Components.Account
+@using EventBooking.Web.Components.Account.Shared
+
+@attribute [Authorize(Policy = AuthorizationPolicies.CanCreateEvents)]
+
+@inject UserManager<ApplicationUser> UserManager
+@inject EventService Events
+@inject ImageUrls ImageUrls
+@inject IdentityRedirectManager RedirectManager
+@inject NavigationManager NavigationManager
+
+@if (ev is not null)
+{
+    <PageTitle>Manage @ev.Name</PageTitle>
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h1 class="mb-0">@ev.Name</h1>
+        <EventStatusBadge Status="ev.Status" />
+    </div>
+    <p><a href="events/@ev.Id">View the event page</a></p>
+
+    <StatusMessage Message="@errorMessage" />
+
+    @*
+        Every form is always rendered: Blazor needs the form to exist to handle a POST, or a change
+        made in another tab meanwhile gets a bare "400 Bad Request" instead of our error message.
+    *@
+    <div class="row g-5">
+        <div class="col-xl-8">
+            <h2 class="h4">Details</h2>
+            <EditForm Model="Input" method="post" OnValidSubmit="SaveAsync" FormName="event-details">
+                @if (IsEditable)
+                {
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger" role="alert" />
+                    <EventFields Input="Input" ScheduleLocked="ev.Status != EventStatus.Draft" EventId="ev.Id" />
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                }
+                else
+                {
+                    <p>A cancelled event can't be changed.</p>
+                }
+            </EditForm>
+        </div>
+
+        <div class="col-xl-4">
+            <h2 class="h4">Images (@images.Count of @Event.MaxImages)</h2>
+            <p class="text-body-secondary small">
+                The first image is the cover. At least one is needed to publish. JPEG, PNG or WebP, up to 2 MB.
+            </p>
+
+            <form method="post" @formname="remove-image" @onsubmit="RemoveImageAsync">
+                <AntiforgeryToken />
+                <div class="d-flex flex-column gap-2 mb-3">
+                    @foreach (var image in images)
+                    {
+                        <div class="d-flex align-items-center gap-2">
+                            <img src="@ImageUrls.For(image.BlobName)" class="event-thumbnail rounded" alt="" />
+                            @if (image == images[0])
+                            {
+                                <span class="badge text-bg-light">Cover</span>
+                            }
+                            @if (IsEditable)
+                            {
+                                @* The clicked button sends its value as BlobName. *@
+                                <button type="submit" name="BlobName" value="@image.BlobName" class="btn btn-sm btn-outline-danger ms-auto">Remove</button>
+                            }
+                        </div>
+                    }
+                </div>
+            </form>
+
+            @* multipart/form-data is needed for the browser to send the file itself. *@
+            <form method="post" enctype="multipart/form-data" @formname="upload-image" @onsubmit="UploadImageAsync">
+                <AntiforgeryToken />
+                @if (IsEditable && images.Count < Event.MaxImages)
+                {
+                    <div class="input-group mb-3">
+                        <input type="file" name="image" accept="image/jpeg,image/png,image/webp" class="form-control" aria-label="Image" required />
+                        <button type="submit" class="btn btn-outline-primary">Upload</button>
+                    </div>
+                }
+            </form>
+
+            <h2 class="h4 mt-4">Status</h2>
+            <form method="post" @formname="event-action" @onsubmit="RunActionAsync">
+                <AntiforgeryToken />
+                @switch (ev.Status)
+                {
+                    case EventStatus.Draft:
+                        <p>Only you can see this draft. Publishing makes it visible to everyone.</p>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="submit" name="Action" value="@EventAction.Publish" class="btn btn-success">Publish</button>
+                            <button type="submit" name="Action" value="@EventAction.Delete" class="btn btn-outline-danger"
+                                    onclick="return confirm('Delete this draft and its images? This can\'t be undone.')">Delete draft</button>
+                        </div>
+                        break;
+                    case EventStatus.Published:
+                        <p>Everyone can see this event.</p>
+                        <button type="submit" name="Action" value="@EventAction.Cancel" class="btn btn-outline-danger"
+                                onclick="return confirm('Cancel this event? This can\'t be undone.')">Cancel event</button>
+                        break;
+                    case EventStatus.Cancelled:
+                        <p>Cancelled on @ev.CancelledAt?.UtcDateTime.ToString("d MMM yyyy HH:mm") (UTC).</p>
+                        break;
+                }
+            </form>
+        </div>
+    </div>
+}
+
+<p class="mt-4"><a href="my-events">Back to my events</a></p>
+
+@code {
+    private string userId = "";
+    private Event? ev;
+    private List<EventImage> images = [];
+    private string? errorMessage;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "event-details")]
+    private EventInput Input { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "remove-image")]
+    private string? BlobName { get; set; }
+
+    [SupplyParameterFromForm(FormName = "event-action")]
+    private EventAction? Action { get; set; }
+
+    private bool IsEditable => ev?.Status is EventStatus.Draft or EventStatus.Published;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The [Authorize] attribute means there is always a signed-in user here.
+        userId = UserManager.GetUserId(HttpContext.User)!;
+        ev = await Events.GetEventAsync(Id, userId);
+        if (ev is null || !ev.IsOrganisedBy(userId))
+        {
+            ev = null;
+            // Responds with 404 and shows the app's Not Found page.
+            NavigationManager.NotFound();
+            return;
+        }
+
+        images = ev.Images.OrderBy(i => i.SortOrder).ToList();
+        // Null unless the details form was posted, so a fresh page shows the saved values.
+        Input ??= EventInput.FromEvent(ev);
+    }
+
+    private Task SaveAsync() => RunAsync(() =>
+    {
+        var details = ev!.Status == EventStatus.Draft ? Input.ToDetails() : Input.ToDetailsKeepingSchedule(ev);
+        return Events.UpdateAsync(Id, userId, details);
+    }, "Changes saved.");
+
+    private Task UploadImageAsync() => RunAsync(async () =>
+    {
+        var file = HttpContext.Request.Form.Files.GetFile("image")
+            ?? throw new BusinessRuleException("Choose an image to upload.");
+        await using var stream = file.OpenReadStream();
+        await Events.AddImageAsync(Id, userId, stream, HttpContext.RequestAborted);
+    }, "Image uploaded.");
+
+    private Task RemoveImageAsync() => RunAsync(
+        () => Events.RemoveImageAsync(Id, userId, BlobName ?? "", HttpContext.RequestAborted),
+        "Image removed.");
+
+    private Task RunActionAsync() => Action switch
+    {
+        EventAction.Publish => RunAsync(() => Events.PublishAsync(Id, userId), "Published. Everyone can now see this event."),
+        EventAction.Delete => RunAsync(() => Events.DeleteAsync(Id, userId), "Draft deleted.", redirectTo: "my-events"),
+        EventAction.Cancel => RunAsync(() => Events.CancelAsync(Id, userId), "Event cancelled."),
+        _ => Task.CompletedTask,
+    };
+
+    /// <summary>
+    /// Runs the change, then reloads the page with <paramref name="message"/>. A broken rule is shown
+    /// on this page instead, keeping what the user typed.
+    /// </summary>
+    private async Task RunAsync(Func<Task> change, string message, string? redirectTo = null)
+    {
+        try
+        {
+            await change();
+        }
+        catch (BusinessRuleException ex)
+        {
+            errorMessage = "Error: " + ex.Message;
+            return;
+        }
+
+        RedirectManager.RedirectToWithStatus(redirectTo ?? $"my-events/{Id}", message, HttpContext);
+    }
+
+    private enum EventAction { Publish, Delete, Cancel }
+}

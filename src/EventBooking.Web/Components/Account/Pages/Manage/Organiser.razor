@@ -98,7 +98,6 @@ else if (reasonCannotApply is not null && latest?.Status != ApplicationStatus.Pe
             return;
         }
 
-        // Outside the try, because a redirect works by throwing an exception.
         RedirectManager.RedirectToCurrentPageWithStatus("Your application has been sent. An admin will review it.", HttpContext);
     }
 }
