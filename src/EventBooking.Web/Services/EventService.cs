@@ -118,8 +118,9 @@ public class EventService(
         if (ev.StartsAt != details.StartsAt || ev.EndsAt != details.EndsAt || ev.TimeZoneId != details.TimeZoneId)
             ev.ChangeSchedule(details.StartsAt, details.EndsAt, details.TimeZoneId, timeProvider.GetUtcNow());
         ev.ChangeVenue(details.VenueName, details.Address, details.Latitude, details.Longitude);
-        // TODO: pass the real count of confirmed bookings once bookings exist.
-        ev.ChangeCapacity(details.Capacity, confirmedBookings: 0);
+        var confirmedBookings = await db.Bookings.CountAsync(
+            b => b.EventId == eventId && b.Status == BookingStatus.Confirmed);
+        ev.ChangeCapacity(details.Capacity, confirmedBookings);
 
         await SaveAsync();
     }

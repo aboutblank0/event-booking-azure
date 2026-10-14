@@ -172,6 +172,26 @@ public class EventServiceTests(SqlServerFixture database)
         Assert.Equal("Renamed", (await LoadAsync(ev.Id)).Name);
     }
 
+    [Fact]
+    public async Task Update_CapacityCannotGoBelowConfirmedBookings()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreatePublishedEventAsync(organiserId);
+        await using (var db = database.CreateContext())
+        {
+            var loaded = await db.Events.SingleAsync(e => e.Id == ev.Id);
+            db.Bookings.Add(Booking.Create(loaded, await database.CreateUserAsync(), 0, false, Now));
+            db.Bookings.Add(Booking.Create(loaded, await database.CreateUserAsync(), 1, false, Now));
+            await db.SaveChangesAsync();
+        }
+
+        await Assert.ThrowsAsync<BusinessRuleException>(
+            () => WithServiceAsync(s => s.UpdateAsync(ev.Id, organiserId, Details() with { Capacity = 1 })));
+        await WithServiceAsync(s => s.UpdateAsync(ev.Id, organiserId, Details() with { Capacity = 2 }));
+
+        Assert.Equal(2, (await LoadAsync(ev.Id)).Capacity);
+    }
+
     // ---------- Images ----------
 
     [Fact]
