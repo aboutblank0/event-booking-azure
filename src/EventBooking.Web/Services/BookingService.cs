@@ -29,18 +29,16 @@ public class BookingService(
     UserManager<ApplicationUser> userManager,
     TimeProvider timeProvider)
 {
-    /// <summary>Places left for each event, by event id, in one query.</summary>
-    public async Task<Dictionary<int, int>> GetPlacesLeftAsync(IReadOnlyCollection<Event> events)
-    {
-        var ids = events.Select(e => e.Id).ToList();
-        var counts = await db.Bookings
-            .Where(b => ids.Contains(b.EventId) && b.Status == BookingStatus.Confirmed)
+    /// <summary>
+    /// Confirmed bookings for each event, by event id, in one query. Events without bookings are
+    /// left out; use <c>GetValueOrDefault</c>.
+    /// </summary>
+    public Task<Dictionary<int, int>> GetConfirmedCountsAsync(IReadOnlyCollection<int> eventIds) =>
+        db.Bookings
+            .Where(b => eventIds.Contains(b.EventId) && b.Status == BookingStatus.Confirmed)
             .GroupBy(b => b.EventId)
             .Select(g => new { EventId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(c => c.EventId, c => c.Count);
-
-        return events.ToDictionary(e => e.Id, e => e.PlacesLeft(counts.GetValueOrDefault(e.Id)));
-    }
 
     /// <summary>Booking details for an event's page. Pass a null user for visitors.</summary>
     public async Task<BookingInfo> GetBookingInfoAsync(Event ev, string? userId)

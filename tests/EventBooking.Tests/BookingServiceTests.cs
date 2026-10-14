@@ -313,7 +313,7 @@ public class BookingServiceTests(SqlServerFixture database)
     }
 
     [Fact]
-    public async Task GetPlacesLeft_CountsOnlyConfirmedBookings()
+    public async Task GetConfirmedCounts_CountsOnlyConfirmedBookings()
     {
         var ev = await CreatePublishedEventAsync(capacity: 5);
         var other = await CreatePublishedEventAsync(capacity: 8);
@@ -322,10 +322,10 @@ public class BookingServiceTests(SqlServerFixture database)
         await WithServiceAsync(s => s.CancelAsync(cancelled.Id, userId));
         await BookAsync(ev.Id, await database.CreateUserAsync());
 
-        var placesLeft = await WithServiceAsync(s => s.GetPlacesLeftAsync([ev, other]));
+        var counts = await WithServiceAsync(s => s.GetConfirmedCountsAsync([ev.Id, other.Id]));
 
-        Assert.Equal(4, placesLeft[ev.Id]);
-        Assert.Equal(8, placesLeft[other.Id]);
+        Assert.Equal(1, counts[ev.Id]);
+        Assert.False(counts.ContainsKey(other.Id));
     }
 
     [Fact]
