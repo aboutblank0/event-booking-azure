@@ -52,6 +52,7 @@ var maxImageCount = builder.Configuration.GetValue<int>("Storage:MaxImageCount")
 builder.Services.AddSingleton(new BlobServiceClient(new Uri(blobEndpoint), azureCredential));
 builder.Services.AddSingleton(sp => new ImageStorage(
     sp.GetRequiredService<BlobServiceClient>().GetBlobContainerClient(imagesContainer), maxImageCount));
+builder.Services.AddSingleton<IImageStorage>(sp => sp.GetRequiredService<ImageStorage>());
 builder.Services.AddStorageRateLimiting();
 
 var app = builder.Build();

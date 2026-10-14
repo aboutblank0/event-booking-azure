@@ -8,25 +8,20 @@ namespace EventBooking.Web.Storage;
 public sealed record ImageUploadResult(ImageUploadError Error, string? BlobName = null);
 
 /// <summary>Stores event images in an Azure Blob Storage container.</summary>
-public sealed class ImageStorage(BlobContainerClient container, int maxImageCount)
+public sealed class ImageStorage(BlobContainerClient container, int maxImageCount) : IImageStorage
 {
     public string ContainerName => container.Name;
     public int MaxImageCount => maxImageCount;
 
-    public async Task<ImageUploadResult> UploadAsync(IFormFile file, CancellationToken cancellationToken)
+    public async Task<ImageUploadResult> UploadAsync(Stream content, CancellationToken cancellationToken)
     {
-        if (file.Length > ImageUploadRules.MaxSizeBytes)
-            return new(ImageUploadError.TooLarge);
+        // Read into memory (at most 2 MB + 1 byte), because an upload stream can only be read once.
+        // The extra byte shows whether the file is over the limit.
+        var data = new byte[ImageUploadRules.MaxSizeBytes + 1];
+        var length = await content.ReadAtLeastAsync(data, data.Length, throwOnEndOfStream: false, cancellationToken);
 
-        var header = new byte[ImageUploadRules.HeaderLength];
-        int headerLength;
-        using (var stream = file.OpenReadStream())
-        {
-            headerLength = await stream.ReadAtLeastAsync(
-                header, header.Length, throwOnEndOfStream: false, cancellationToken);
-        }
-
-        var error = ImageUploadRules.ValidateFile(file.Length, header.AsSpan(0, headerLength), out var type);
+        var header = data.AsSpan(0, Math.Min(length, ImageUploadRules.HeaderLength));
+        var error = ImageUploadRules.ValidateFile(length, header, out var type);
         if (error != ImageUploadError.None)
             return new(error);
 
@@ -37,7 +32,7 @@ public sealed class ImageStorage(BlobContainerClient container, int maxImageCoun
         // Never use the uploaded file name, so users can't overwrite other blobs.
         var blobName = $"{Guid.NewGuid():N}.{type!.Extension}";
 
-        using var upload = file.OpenReadStream();
+        using var upload = new MemoryStream(data, 0, length);
         await container.GetBlobClient(blobName).UploadAsync(upload, new BlobUploadOptions
         {
             HttpHeaders = new BlobHttpHeaders { ContentType = type.ContentType },
@@ -47,6 +42,9 @@ public sealed class ImageStorage(BlobContainerClient container, int maxImageCoun
 
         return new(ImageUploadError.None, blobName);
     }
+
+    public Task DeleteAsync(string blobName, CancellationToken cancellationToken) =>
+        container.GetBlobClient(blobName).DeleteIfExistsAsync(cancellationToken: cancellationToken);
 
     /// <summary>Counts the stored images, stopping once the limit is reached.</summary>
     public async Task<int> CountAsync(CancellationToken cancellationToken)
