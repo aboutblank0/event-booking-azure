@@ -1,0 +1,152 @@
+@page "/admin/users/{Id}"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using EventBooking.Core
+@using EventBooking.Web.Data
+@using EventBooking.Web.Services
+@using EventBooking.Web.Components.Account
+@using EventBooking.Web.Components.Account.Shared
+
+@attribute [Authorize(Policy = AuthorizationPolicies.ManageUsers)]
+
+@inject UserManager<ApplicationUser> UserManager
+@inject UserAdminService UserAdmin
+@inject IdentityRedirectManager RedirectManager
+@inject NavigationManager NavigationManager
+
+@if (user is not null)
+{
+    <PageTitle>Manage @user.Email</PageTitle>
+
+    <h1 class="text-break">@user.Email</h1>
+
+    <StatusMessage Message="@errorMessage" />
+
+    <dl class="row">
+        <dt class="col-sm-3">Roles</dt>
+        <dd class="col-sm-9"><UserRoleBadges User="user" /></dd>
+        <dt class="col-sm-3">Account</dt>
+        <dd class="col-sm-9">@(user.IsLocked ? "Locked: can't sign in" : "Active")</dd>
+    </dl>
+
+    @if (IsProtected)
+    {
+        <div class="alert alert-info">
+            @(user.Id == adminId
+                ? "This is you. You can't remove your own Admin role or lock your own account."
+                : "This admin is set in the app's configuration, so their Admin role can't be removed and their account can't be locked.")
+        </div>
+    }
+
+    @*
+        Always rendered: Blazor needs the form to exist to handle a POST, or a change made by
+        another admin meanwhile gets a bare "400 Bad Request" instead of our error message.
+    *@
+    <form method="post" @formname="user-action" @onsubmit="RunActionAsync">
+        <AntiforgeryToken />
+        <div class="d-flex flex-column gap-3" style="max-width: 40rem">
+            @if (user.IsOrganiser)
+            {
+                <div>
+                    <button type="submit" name="Action" value="@UserAction.RemoveOrganiser" class="btn btn-outline-danger"
+                            onclick="return confirm('Remove the Organiser role? Their events will be hidden.')">Remove Organiser role</button>
+                    <div class="form-text">Their events are hidden from everyone but admins until the role is given back. They're signed out.</div>
+                </div>
+            }
+            @if (!user.IsAdmin && !user.IsOrganiser)
+            {
+                <div>
+                    <button type="submit" name="Action" value="@UserAction.GiveAdmin" class="btn btn-outline-primary"
+                            onclick="return confirm('Make this user an admin?')">Make admin</button>
+                    <div class="form-text">Admins review applications and manage users and events.</div>
+                </div>
+            }
+            @if (user.IsAdmin && !IsProtected)
+            {
+                <div>
+                    <button type="submit" name="Action" value="@UserAction.RemoveAdmin" class="btn btn-outline-danger"
+                            onclick="return confirm('Remove the Admin role?')">Remove Admin role</button>
+                    <div class="form-text">They become a normal user and are signed out.</div>
+                </div>
+            }
+            @if (user.IsLocked)
+            {
+                <div>
+                    <button type="submit" name="Action" value="@UserAction.Unlock" class="btn btn-outline-primary">Unlock account</button>
+                    <div class="form-text">They can sign in again, and any events they organise are visible again.</div>
+                </div>
+            }
+            else if (!IsProtected)
+            {
+                <div>
+                    <button type="submit" name="Action" value="@UserAction.Lock" class="btn btn-danger"
+                            onclick="return confirm('Lock this account? They will be signed out.')">Lock account</button>
+                    <div class="form-text">They're signed out and can't sign in. Their events are hidden meanwhile, not deleted.</div>
+                </div>
+            }
+        </div>
+    </form>
+}
+
+<p class="mt-4"><a href="admin/users">Back to users</a></p>
+
+@code {
+    private string adminId = "";
+    private UserForAdmin? user;
+    private string? errorMessage;
+
+    [Parameter]
+    public string Id { get; set; } = "";
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "user-action")]
+    private UserAction? Action { get; set; }
+
+    // Only hides buttons; the service enforces the same rule.
+    private bool IsProtected => user is not null && (user.IsConfigAdmin || user.Id == adminId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The [Authorize] attribute means there is always a signed-in user here.
+        adminId = UserManager.GetUserId(HttpContext.User)!;
+        user = await UserAdmin.GetUserAsync(adminId, Id);
+        if (user is null)
+            // Responds with 404 and shows the app's Not Found page.
+            NavigationManager.NotFound();
+    }
+
+    private async Task RunActionAsync()
+    {
+        string message;
+        try
+        {
+            message = Action switch
+            {
+                UserAction.RemoveOrganiser => await Run(UserAdmin.RemoveOrganiserAsync, "Removed the Organiser role."),
+                UserAction.GiveAdmin => await Run(UserAdmin.GiveAdminAsync, "They are now an admin."),
+                UserAction.RemoveAdmin => await Run(UserAdmin.RemoveAdminAsync, "Removed the Admin role."),
+                UserAction.Lock => await Run(UserAdmin.LockAsync, "Account locked."),
+                UserAction.Unlock => await Run(UserAdmin.UnlockAsync, "Account unlocked."),
+                _ => throw new BusinessRuleException("Choose an action."),
+            };
+        }
+        catch (BusinessRuleException ex)
+        {
+            errorMessage = "Error: " + ex.Message;
+            return;
+        }
+
+        RedirectManager.RedirectToWithStatus($"admin/users/{Id}", message, HttpContext);
+    }
+
+    private async Task<string> Run(Func<string, string, Task> action, string message)
+    {
+        await action(adminId, Id);
+        return message;
+    }
+
+    private enum UserAction { RemoveOrganiser, GiveAdmin, RemoveAdmin, Lock, Unlock }
+}

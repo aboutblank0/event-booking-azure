@@ -1,0 +1,120 @@
+@page "/admin/events"
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using EventBooking.Core
+@using EventBooking.Web.Data
+@using EventBooking.Web.Services
+@using EventBooking.Web.Components.Account
+@using EventBooking.Web.Components.Account.Shared
+
+@attribute [Authorize(Policy = AuthorizationPolicies.ModerateEvents)]
+
+@inject UserManager<ApplicationUser> UserManager
+@inject EventService Events
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>All events</PageTitle>
+
+<h1>All events</h1>
+
+<p class="text-body-secondary">
+    Published and cancelled events, including hidden ones. An event is hidden while its organiser has lost
+    the Organiser role or is locked. Drafts are only seen by their organiser.
+</p>
+
+<StatusMessage Message="@errorMessage" />
+
+@*
+    Always rendered: Blazor needs the form to exist to handle a POST, or a change made
+    meanwhile gets a bare "400 Bad Request" instead of our error message.
+*@
+<form method="post" @formname="cancel-event" @onsubmit="CancelAsync">
+    <AntiforgeryToken />
+    @if (events is null)
+    {
+        <p>Loading...</p>
+    }
+    else if (events.Count == 0)
+    {
+        <p>There are no published or cancelled events.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Organiser</th>
+                        <th>When (venue time)</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in events)
+                    {
+                        var ev = item.Event;
+                        <tr>
+                            <td><a href="events/@ev.Id">@ev.Name</a></td>
+                            <td class="text-break">@item.OrganiserEmail</td>
+                            <td>@VenueTime.FormatRange(ev.StartsAt, ev.EndsAt, ev.TimeZoneId)</td>
+                            <td>
+                                <EventStatusBadge Status="ev.Status" />
+                                @if (item.IsHidden)
+                                {
+                                    <span class="badge text-bg-warning">Hidden</span>
+                                }
+                            </td>
+                            <td>
+                                @if (ev.Status == EventStatus.Published)
+                                {
+                                    @* The clicked button sends its value as EventId. *@
+                                    <button type="submit" name="EventId" value="@ev.Id" class="btn btn-sm btn-outline-danger"
+                                            onclick="return confirm('Cancel this event? This can\'t be undone.')">Cancel</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</form>
+
+@code {
+    private string adminId = "";
+    private List<EventForAdmin>? events;
+    private string? errorMessage;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "cancel-event")]
+    private int? EventId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The [Authorize] attribute means there is always a signed-in user here.
+        adminId = UserManager.GetUserId(HttpContext.User)!;
+        events = await Events.GetEventsForAdminAsync(adminId);
+    }
+
+    private async Task CancelAsync()
+    {
+        try
+        {
+            if (EventId is not { } eventId)
+                throw new BusinessRuleException("Choose an event to cancel.");
+            await Events.CancelAsync(eventId, adminId);
+        }
+        catch (BusinessRuleException ex)
+        {
+            errorMessage = "Error: " + ex.Message;
+            return;
+        }
+
+        RedirectManager.RedirectToWithStatus("admin/events", "Event cancelled.", HttpContext);
+    }
+}

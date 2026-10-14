@@ -36,4 +36,14 @@ public class AuthorizationPolicyTests
         Assert.False(await IsAllowedAsync(AuthorizationPolicies.CanCreateEvents, Roles.Admin));
         Assert.False(await IsAllowedAsync(AuthorizationPolicies.CanCreateEvents));
     }
+
+    [Theory]
+    [InlineData(AuthorizationPolicies.ManageUsers)]
+    [InlineData(AuthorizationPolicies.ModerateEvents)]
+    public async Task AdminPolicies_OnlyAdmins(string policy)
+    {
+        Assert.True(await IsAllowedAsync(policy, Roles.Admin));
+        Assert.False(await IsAllowedAsync(policy, Roles.Organiser));
+        Assert.False(await IsAllowedAsync(policy));
+    }
 }
