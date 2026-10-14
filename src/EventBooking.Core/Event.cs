@@ -102,15 +102,21 @@ public class Event
         SetCapacity(capacity, confirmedBookings);
     }
 
+    /// <summary>Checks an image could be added, so a caller can stop before uploading one.</summary>
+    public void EnsureCanAddImage()
+    {
+        EnsureEditable();
+        if (_images.Count >= MaxImages)
+            throw new BusinessRuleException($"An event can have at most {MaxImages} images.");
+    }
+
     /// <summary>Adds an image at the end of the display order.</summary>
     public void AddImage(string blobName)
     {
-        EnsureEditable();
+        EnsureCanAddImage();
 
         if (string.IsNullOrWhiteSpace(blobName))
             throw new BusinessRuleException("An image must have a blob name.");
-        if (_images.Count >= MaxImages)
-            throw new BusinessRuleException($"An event can have at most {MaxImages} images.");
         if (_images.Any(i => i.BlobName == blobName))
             throw new BusinessRuleException("This image has already been added to the event.");
 

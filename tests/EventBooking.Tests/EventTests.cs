@@ -173,6 +173,18 @@ public class EventTests
     }
 
     [Fact]
+    public void EnsureCanAddImage_RejectsFullOrCancelledEvents()
+    {
+        var full = CreateEvent();
+        for (var i = 1; i <= 5; i++)
+            full.AddImage($"{i}.jpg");
+
+        CreateEvent().EnsureCanAddImage();
+        Assert.Throws<BusinessRuleException>(() => full.EnsureCanAddImage());
+        Assert.Throws<BusinessRuleException>(() => CreateCancelledEvent().EnsureCanAddImage());
+    }
+
+    [Fact]
     public void AddImage_RejectsDuplicateOrBlankBlobName()
     {
         var ev = CreateEvent();

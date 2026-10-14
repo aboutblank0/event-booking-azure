@@ -16,12 +16,6 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 14, 12, 0, 0, TimeSpan.Zero);
 
-    /// <summary>A clock that always says the given time.</summary>
-    private class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
-
     /// <summary>Runs <paramref name="action"/> with a service from a fresh scope, at the given time.</summary>
     private async Task<T> WithServiceAsync<T>(Func<OrganiserApplicationService, Task<T>> action, DateTimeOffset? now = null)
     {
@@ -35,20 +29,6 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
 
     private Task WithServiceAsync(Func<OrganiserApplicationService, Task> action, DateTimeOffset? now = null) =>
         WithServiceAsync(async s => { await action(s); return true; }, now);
-
-    private async Task<string> CreateUserAsync(string? role = null)
-    {
-        await using var services = database.CreateIdentityServices();
-        await using var scope = services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<IdentitySeeder>().SeedAsync(null);
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var email = $"{Guid.NewGuid()}@example.com";
-        var user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true };
-        Assert.True((await userManager.CreateAsync(user)).Succeeded);
-        if (role is not null)
-            Assert.True((await userManager.AddToRoleAsync(user, role)).Succeeded);
-        return user.Id;
-    }
 
     private async Task<(IList<string> Roles, string? SecurityStamp)> GetUserStateAsync(string userId)
     {
@@ -73,7 +53,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [Fact]
     public async Task Apply_SavesAPendingApplication()
     {
-        var userId = await CreateUserAsync();
+        var userId = await database.CreateUserAsync();
 
         var application = await ApplyAsync(userId);
 
@@ -89,7 +69,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [InlineData(Roles.Admin)]
     public async Task Apply_RejectsOrganisersAndAdmins(string role)
     {
-        var userId = await CreateUserAsync(role);
+        var userId = await database.CreateUserAsync(role);
 
         await Assert.ThrowsAsync<BusinessRuleException>(() => ApplyAsync(userId));
     }
@@ -97,7 +77,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [Fact]
     public async Task Apply_RejectsASecondPendingApplication()
     {
-        var userId = await CreateUserAsync();
+        var userId = await database.CreateUserAsync();
         await ApplyAsync(userId);
 
         await Assert.ThrowsAsync<BusinessRuleException>(() => ApplyAsync(userId));
@@ -106,7 +86,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [Fact]
     public async Task Apply_TwoAtTheSameMoment_OnlyOneIsSaved()
     {
-        var userId = await CreateUserAsync();
+        var userId = await database.CreateUserAsync();
 
         // Both start before either has saved, like a double click on the submit button.
         var results = await Task.WhenAll(
@@ -123,8 +103,8 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [Fact]
     public async Task Apply_AfterRejection_WaitsOneMonth()
     {
-        var adminId = await CreateUserAsync(Roles.Admin);
-        var userId = await CreateUserAsync();
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+        var userId = await database.CreateUserAsync();
         var first = await ApplyAsync(userId);
         await WithServiceAsync(s => s.RejectAsync(first.Id, adminId, null));
 
@@ -141,8 +121,8 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [Fact]
     public async Task Approve_GivesTheOrganiserRole_WithoutChangingTheSecurityStamp()
     {
-        var adminId = await CreateUserAsync(Roles.Admin);
-        var userId = await CreateUserAsync();
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+        var userId = await database.CreateUserAsync();
         var application = await ApplyAsync(userId);
         var (_, stampBefore) = await GetUserStateAsync(userId);
 
@@ -162,8 +142,8 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [Fact]
     public async Task Reject_KeepsTheUserANormalUser()
     {
-        var adminId = await CreateUserAsync(Roles.Admin);
-        var userId = await CreateUserAsync();
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+        var userId = await database.CreateUserAsync();
         var application = await ApplyAsync(userId);
 
         await WithServiceAsync(s => s.RejectAsync(application.Id, adminId, "Please add a website."));
@@ -177,11 +157,11 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [Fact]
     public async Task GetPending_ListsPendingApplicationsWithTheApplicantsEmail()
     {
-        var adminId = await CreateUserAsync(Roles.Admin);
-        var userId = await CreateUserAsync();
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+        var userId = await database.CreateUserAsync();
         var pending = await ApplyAsync(userId);
-        var older = await ApplyAsync(await CreateUserAsync(), Now.AddDays(-1));
-        var rejected = await ApplyAsync(await CreateUserAsync());
+        var older = await ApplyAsync(await database.CreateUserAsync(), Now.AddDays(-1));
+        var rejected = await ApplyAsync(await database.CreateUserAsync());
         await WithServiceAsync(s => s.RejectAsync(rejected.Id, adminId, null));
 
         var list = await WithServiceAsync(s => s.GetPendingApplicationsAsync(adminId));
@@ -201,7 +181,7 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [Fact]
     public async Task GetApplications_OnlyAdmins()
     {
-        var notAdminId = await CreateUserAsync();
+        var notAdminId = await database.CreateUserAsync();
         var application = await ApplyAsync(notAdminId);
 
         await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(s => s.GetPendingApplicationsAsync(notAdminId)));
@@ -213,8 +193,8 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [InlineData(Roles.Organiser)]
     public async Task Review_OnlyAdminsCanReview(string? role)
     {
-        var notAdminId = await CreateUserAsync(role);
-        var application = await ApplyAsync(await CreateUserAsync());
+        var notAdminId = await database.CreateUserAsync(role);
+        var application = await ApplyAsync(await database.CreateUserAsync());
 
         await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(s => s.ApproveAsync(application.Id, notAdminId)));
         await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(s => s.RejectAsync(application.Id, notAdminId, null)));
@@ -225,8 +205,8 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     public async Task Review_ChecksTheAdminRoleInTheDatabaseAtTheTimeOfTheAction()
     {
         // An admin whose role was removed after their page loaded can't review any more.
-        var adminId = await CreateUserAsync(Roles.Admin);
-        var application = await ApplyAsync(await CreateUserAsync());
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+        var application = await ApplyAsync(await database.CreateUserAsync());
         await using (var services = database.CreateIdentityServices())
         await using (var scope = services.CreateAsyncScope())
         {
@@ -240,8 +220,8 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [Fact]
     public async Task Approve_RejectsAnApplicantWhoIsNowAnAdmin()
     {
-        var adminId = await CreateUserAsync(Roles.Admin);
-        var userId = await CreateUserAsync();
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+        var userId = await database.CreateUserAsync();
         var application = await ApplyAsync(userId);
         await using (var services = database.CreateIdentityServices())
         await using (var scope = services.CreateAsyncScope())
@@ -257,9 +237,9 @@ public class OrganiserApplicationServiceTests(SqlServerFixture database)
     [Fact]
     public async Task Approve_AfterAnotherAdminRejected_FailsAndGivesNoRole()
     {
-        var firstAdmin = await CreateUserAsync(Roles.Admin);
-        var secondAdmin = await CreateUserAsync(Roles.Admin);
-        var userId = await CreateUserAsync();
+        var firstAdmin = await database.CreateUserAsync(Roles.Admin);
+        var secondAdmin = await database.CreateUserAsync(Roles.Admin);
+        var userId = await database.CreateUserAsync();
         var application = await ApplyAsync(userId);
 
         await using var services = database.CreateIdentityServices();

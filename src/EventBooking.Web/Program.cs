@@ -38,6 +38,7 @@ builder.Services.AddEventBookingAuthorization();
 // Services use TimeProvider instead of DateTimeOffset.UtcNow, so tests can fix the time.
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<OrganiserApplicationService>();
+builder.Services.AddScoped<EventService>();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
