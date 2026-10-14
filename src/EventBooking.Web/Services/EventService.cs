@@ -121,11 +121,26 @@ public class EventService(
             await imageStorage.DeleteAsync(blobName, cancellationToken);
     }
 
+    /// <summary>Organisers can cancel their own published events; admins can cancel any.</summary>
+    public async Task CancelAsync(int eventId, string userId)
+    {
+        var ev = await IsActiveInRoleAsync(userId, Roles.Admin)
+            ? await FindEventAsync(eventId)
+            : await FindOwnEventAsync(eventId, userId);
+        ev.Cancel(timeProvider.GetUtcNow());
+        await db.SaveChangesAsync();
+    }
+
     private async Task EnsureActiveOrganiserAsync(string userId)
     {
-        var user = await userManager.FindByIdAsync(userId);
-        if (user is null || IsLockedOut(user) || !await userManager.IsInRoleAsync(user, Roles.Organiser))
+        if (!await IsActiveInRoleAsync(userId, Roles.Organiser))
             throw new BusinessRuleException("Only organisers can create and manage events.");
+    }
+
+    private async Task<bool> IsActiveInRoleAsync(string userId, string role)
+    {
+        var user = await userManager.FindByIdAsync(userId);
+        return user is not null && !IsLockedOut(user) && await userManager.IsInRoleAsync(user, role);
     }
 
     // A null LockoutEnd means never locked; "null > now" is false.
@@ -136,12 +151,15 @@ public class EventService(
     {
         await EnsureActiveOrganiserAsync(userId);
 
-        var ev = await db.Events.Include(e => e.Images).SingleOrDefaultAsync(e => e.Id == eventId)
-            ?? throw new BusinessRuleException("This event no longer exists.");
+        var ev = await FindEventAsync(eventId);
         if (!ev.IsOrganisedBy(userId))
             throw new BusinessRuleException("You can only change events you organise.");
         return ev;
     }
+
+    private async Task<Event> FindEventAsync(int eventId) =>
+        await db.Events.Include(e => e.Images).SingleOrDefaultAsync(e => e.Id == eventId)
+        ?? throw new BusinessRuleException("This event no longer exists.");
 
     private static string UploadErrorMessage(ImageUploadError error) => error switch
     {

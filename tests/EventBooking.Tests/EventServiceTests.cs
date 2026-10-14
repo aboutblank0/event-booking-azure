@@ -41,6 +41,14 @@ public class EventServiceTests(SqlServerFixture database)
     private Task<string> AddImageAsync(int eventId, string userId) =>
         WithServiceAsync(s => s.AddImageAsync(eventId, userId, new MemoryStream([1, 2, 3])));
 
+    private async Task<Event> CreatePublishedEventAsync(string organiserId)
+    {
+        var ev = await CreateEventAsync(organiserId);
+        await AddImageAsync(ev.Id, organiserId);
+        await WithServiceAsync(s => s.PublishAsync(ev.Id, organiserId));
+        return ev;
+    }
+
     private async Task<Event> LoadAsync(int id)
     {
         await using var db = database.CreateContext();
@@ -139,9 +147,7 @@ public class EventServiceTests(SqlServerFixture database)
     public async Task Update_PublishedEvent_AllowsOtherChangesButNotNewDates()
     {
         var organiserId = await database.CreateUserAsync(Roles.Organiser);
-        var ev = await CreateEventAsync(organiserId);
-        await AddImageAsync(ev.Id, organiserId);
-        await WithServiceAsync(s => s.PublishAsync(ev.Id, organiserId));
+        var ev = await CreatePublishedEventAsync(organiserId);
 
         await WithServiceAsync(s => s.UpdateAsync(ev.Id, organiserId, Details("Renamed")));
         await Assert.ThrowsAsync<BusinessRuleException>(
@@ -222,7 +228,7 @@ public class EventServiceTests(SqlServerFixture database)
         Assert.Empty(_storage.Blobs);
     }
 
-    // ---------- Publishing and deleting ----------
+    // ---------- Publishing ----------
 
     [Fact]
     public async Task Publish_MakesTheEventPublished()
@@ -235,6 +241,55 @@ public class EventServiceTests(SqlServerFixture database)
 
         Assert.Equal(EventStatus.Published, (await LoadAsync(ev.Id)).Status);
     }
+
+    // ---------- Cancelling ----------
+
+    [Fact]
+    public async Task Cancel_ByTheOrganiser_CancelsTheEvent()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreatePublishedEventAsync(organiserId);
+
+        await WithServiceAsync(s => s.CancelAsync(ev.Id, organiserId));
+
+        var loaded = await LoadAsync(ev.Id);
+        Assert.Equal(EventStatus.Cancelled, loaded.Status);
+        Assert.Equal(Now, loaded.CancelledAt);
+    }
+
+    [Fact]
+    public async Task Cancel_ByAnAdmin_CancelsAnyEvent()
+    {
+        var ev = await CreatePublishedEventAsync(await database.CreateUserAsync(Roles.Organiser));
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+
+        await WithServiceAsync(s => s.CancelAsync(ev.Id, adminId));
+
+        Assert.Equal(EventStatus.Cancelled, (await LoadAsync(ev.Id)).Status);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(Roles.Organiser)]
+    public async Task Cancel_RejectsOtherUsersAndOrganisers(string? role)
+    {
+        var ev = await CreatePublishedEventAsync(await database.CreateUserAsync(Roles.Organiser));
+        var userId = await database.CreateUserAsync(role);
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(s => s.CancelAsync(ev.Id, userId)));
+    }
+
+    [Fact]
+    public async Task Cancel_RejectsALockedOutAdmin()
+    {
+        var ev = await CreatePublishedEventAsync(await database.CreateUserAsync(Roles.Organiser));
+        var adminId = await database.CreateUserAsync(Roles.Admin);
+        await ChangeUserAsync(adminId, (m, u) => m.SetLockoutEndDateAsync(u, DateTimeOffset.MaxValue));
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() => WithServiceAsync(s => s.CancelAsync(ev.Id, adminId)));
+    }
+
+    // ---------- Deleting ----------
 
     [Fact]
     public async Task Delete_RemovesTheImagesAndHidesTheDraft()
