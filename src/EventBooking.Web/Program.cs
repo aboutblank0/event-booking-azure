@@ -71,7 +71,9 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 
     // Needs the tables from the migrations, so it runs after them.
-    await scope.ServiceProvider.GetRequiredService<IdentitySeeder>().SeedAsync();
+    // Admin:Email comes from user secrets locally and App Service settings on Azure.
+    await scope.ServiceProvider.GetRequiredService<IdentitySeeder>()
+        .SeedAsync(app.Configuration["Admin:Email"]);
 }
 
 // Configure the HTTP request pipeline.

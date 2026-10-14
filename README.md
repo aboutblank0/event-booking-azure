@@ -12,7 +12,18 @@
    dotnet user-secrets set "Storage:BlobEndpoint" "https://<your-storage-account>.blob.core.windows.net/" --project src/EventBooking.Web
    ```
 
-3. Sign in to Azure with `az login`. Locally, the app uses your Azure CLI login to access Blob Storage,
+3. Choose the admin account. Register it in the app first, confirm its email, then set its email address
+   and restart the app. At startup, that user gets the Admin role.
+
+   ```bash
+   dotnet user-secrets set "Admin:Email" "<your email>" --project src/EventBooking.Web
+   ```
+
+   On Azure, set it as the App Service setting `Admin__Email` (App Service uses `__` instead of `:`).
+   Register your account before setting it: until the app sends real emails, anyone who registers
+   with that address first can confirm it.
+
+4. Sign in to Azure with `az login`. Locally, the app uses your Azure CLI login to access Blob Storage,
    so your account needs the **Storage Blob Data Contributor** role on the storage account.
 
 ### Run
