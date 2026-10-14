@@ -75,4 +75,38 @@ public class DatabaseMappingTests
 
         Assert.Contains($"[e].[Status] <> {(int)EventStatus.Deleted}", sql);
     }
+
+    [Fact]
+    public void OrganiserApplication_TextColumnSizesMatchTheCoreRules()
+    {
+        using var db = CreateContext();
+        var application = db.Model.FindEntityType(typeof(OrganiserApplication))!;
+
+        Assert.Equal(OrganiserApplication.OrganisationNameMaxLength, application.FindProperty(nameof(OrganiserApplication.OrganisationName))!.GetMaxLength());
+        Assert.Equal(OrganiserApplication.ContactPhoneMaxLength, application.FindProperty(nameof(OrganiserApplication.ContactPhone))!.GetMaxLength());
+        Assert.Equal(OrganiserApplication.WebsiteMaxLength, application.FindProperty(nameof(OrganiserApplication.Website))!.GetMaxLength());
+        Assert.Equal(OrganiserApplication.DescriptionMaxLength, application.FindProperty(nameof(OrganiserApplication.Description))!.GetMaxLength());
+        Assert.Equal(OrganiserApplication.RejectionReasonMaxLength, application.FindProperty(nameof(OrganiserApplication.RejectionReason))!.GetMaxLength());
+    }
+
+    [Fact]
+    public void OrganiserApplication_RowVersionIsAConcurrencyToken()
+    {
+        using var db = CreateContext();
+        var rowVersion = db.Model.FindEntityType(typeof(OrganiserApplication))!.FindProperty(nameof(OrganiserApplication.RowVersion))!;
+
+        Assert.True(rowVersion.IsConcurrencyToken);
+        Assert.Equal("rowversion", rowVersion.GetColumnType());
+    }
+
+    [Fact]
+    public void OrganiserApplication_OnlyOnePendingApplicationPerUser()
+    {
+        using var db = CreateContext();
+        var index = db.Model.FindEntityType(typeof(OrganiserApplication))!.GetIndexes()
+            .Single(i => i.IsUnique);
+
+        Assert.Equal([nameof(OrganiserApplication.UserId)], index.Properties.Select(p => p.Name));
+        Assert.Equal($"[Status] = {(int)ApplicationStatus.Pending}", index.GetFilter());
+    }
 }

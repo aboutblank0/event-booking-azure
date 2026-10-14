@@ -7,6 +7,7 @@ namespace EventBooking.Web.Data;
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options)
 {
     public DbSet<Event> Events => Set<Event>();
+    public DbSet<OrganiserApplication> OrganiserApplications => Set<OrganiserApplication>();
 
     // Describes how the Core classes map to tables. Core has no EF attributes, so all
     // database details (column sizes, keys, indexes) live here instead.
@@ -62,6 +63,48 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
             // No two images of an event share a SortOrder.
             image.HasIndex(i => new { i.EventId, i.SortOrder }).IsUnique();
+        });
+        builder.Entity<OrganiserApplication>(application =>
+        {
+            application.Property(a => a.OrganisationName).HasMaxLength(OrganiserApplication.OrganisationNameMaxLength);
+            application.Property(a => a.ContactPhone).HasMaxLength(OrganiserApplication.ContactPhoneMaxLength);
+            application.Property(a => a.Website).HasMaxLength(OrganiserApplication.WebsiteMaxLength);
+            application.Property(a => a.Description).HasMaxLength(OrganiserApplication.DescriptionMaxLength);
+            application.Property(a => a.RejectionReason).HasMaxLength(OrganiserApplication.RejectionReasonMaxLength);
+
+            // Same as Event: a save fails if someone else changed the row first.
+            application.Property(a => a.RowVersion).IsRowVersion();
+
+            // Two foreign keys point at AspNetUsers. SQL Server refuses a table with two
+            // cascading paths from the same parent, so only one of them can cascade.
+            // Cascade: deleting your account (personal data) deletes your applications too.
+            application.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(a => a.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict: an admin who has reviewed applications can't be deleted, which keeps
+            // the history of who approved whom.
+            application.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(a => a.ReviewedById)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Rule 1, enforced by the database as well: at most one Pending application per user.
+            // A filtered index only covers the rows matching the filter, so a user can still
+            // have any number of Approved and Rejected ones. This also catches a double click
+            // that submits twice at the same moment, which the check in Core can't see.
+            // Both indexes are on UserId, so each needs its own name or EF would treat them as one.
+            application.HasIndex(a => a.UserId, "IX_OrganiserApplications_UserId_Pending")
+                .IsUnique()
+                .HasFilter($"[Status] = {(int)ApplicationStatus.Pending}");
+
+            // For loading one user's applications (account page, rules 1 and 3). EF normally adds
+            // this for a foreign key itself, but skips it here because of the filtered index above.
+            application.HasIndex(a => a.UserId, "IX_OrganiserApplications_UserId");
+
+            // For the admin review page: pending applications, oldest first.
+            application.HasIndex(a => new { a.Status, a.SubmittedAt });
         });
     }
 }
