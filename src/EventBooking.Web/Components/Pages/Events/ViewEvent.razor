@@ -1,5 +1,6 @@
 @page "/events/{Id:int}"
 
+@using System.Globalization
 @using Microsoft.AspNetCore.Identity
 @using EventBooking.Core
 @using EventBooking.Web.Data
@@ -64,6 +65,10 @@
                 <dt>Capacity</dt>
                 <dd>@ev.Capacity people</dd>
             </dl>
+            <event-map class="event-map rounded border mb-1" latitude="@Latitude" longitude="@Longitude"
+                       data-permanent="event-map-view-@ev.Id"></event-map>
+            <a href="https://www.openstreetmap.org/?mlat=@Latitude&mlon=@Longitude#map=17/@Latitude/@Longitude"
+               target="_blank" class="small">Open in OpenStreetMap</a>
         </div>
     </div>
 
@@ -77,6 +82,10 @@
 
     [Parameter]
     public int Id { get; set; }
+
+    // Invariant culture, so the decimal point is always "." whatever the server's language settings.
+    private string Latitude => ev!.Latitude.ToString(CultureInfo.InvariantCulture);
+    private string Longitude => ev!.Longitude.ToString(CultureInfo.InvariantCulture);
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;

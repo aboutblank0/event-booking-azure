@@ -69,6 +69,9 @@
     <label for="Input.Address">Address</label>
     <ValidationMessage For="() => Input.Address" class="text-danger" />
 </div>
+<event-map class="event-map rounded border mb-2" latitude-input="Input.Latitude" longitude-input="Input.Longitude"
+           data-permanent="event-map-edit-@(EventId?.ToString() ?? "new")"></event-map>
+<p class="text-body-secondary small">Click the map to set the venue's location, or type its coordinates.</p>
 <div class="row g-3 mb-3">
     <div class="col-sm-6">
         <div class="form-floating">
@@ -105,4 +108,8 @@
     /// <summary>True once the event is published: the schedule is shown but can't be edited.</summary>
     [Parameter]
     public bool ScheduleLocked { get; set; }
+
+    /// <summary>The event being edited, or null when creating one. Keeps each page's map separate.</summary>
+    [Parameter]
+    public int? EventId { get; set; }
 }

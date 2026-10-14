@@ -41,7 +41,7 @@
                 {
                     <DataAnnotationsValidator />
                     <ValidationSummary class="text-danger" role="alert" />
-                    <EventFields Input="Input" ScheduleLocked="ev.Status != EventStatus.Draft" />
+                    <EventFields Input="Input" ScheduleLocked="ev.Status != EventStatus.Draft" EventId="ev.Id" />
                     <button type="submit" class="btn btn-primary">Save changes</button>
                 }
                 else
