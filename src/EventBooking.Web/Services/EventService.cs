@@ -231,28 +231,10 @@ public class EventService(
             throw new BusinessRuleException("Only organisers can create and manage events.");
     }
 
-    private async Task<bool> IsActiveInRoleAsync(string userId, string role)
-    {
-        var user = await userManager.FindByIdAsync(userId);
-        return user is not null && !IsLockedOut(user) && await userManager.IsInRoleAsync(user, role);
-    }
+    private Task<bool> IsActiveInRoleAsync(string userId, string role) =>
+        userManager.IsActiveInRoleAsync(userId, role, timeProvider.GetUtcNow());
 
-    /// <summary>
-    /// Users who have the Organiser role and aren't locked out. A query, not a list, so EF runs it
-    /// inside the events query as a subquery.
-    /// </summary>
-    private IQueryable<string> ActiveOrganiserIds()
-    {
-        var now = timeProvider.GetUtcNow();
-        var organiserRoleIds = db.Roles.Where(r => r.Name == Roles.Organiser).Select(r => r.Id);
-        return db.Users
-            .Where(u => u.LockoutEnd == null || u.LockoutEnd <= now)
-            .Where(u => db.UserRoles.Any(ur => ur.UserId == u.Id && organiserRoleIds.Contains(ur.RoleId)))
-            .Select(u => u.Id);
-    }
-
-    // A null LockoutEnd means never locked; "null > now" is false.
-    private bool IsLockedOut(ApplicationUser user) => user.LockoutEnd > timeProvider.GetUtcNow();
+    private IQueryable<string> ActiveOrganiserIds() => db.ActiveOrganiserIds(timeProvider.GetUtcNow());
 
     /// <summary>Loads the event with its images, after checking the user may change it.</summary>
     private async Task<Event> FindOwnEventAsync(int eventId, string userId)

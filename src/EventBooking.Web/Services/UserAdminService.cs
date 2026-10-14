@@ -94,7 +94,7 @@ public class UserAdminService(
         await EnsureActiveAdminAsync(adminId);
         var user = await FindUserAsync(userId);
         EnsureNotProtected(adminId, user, "lock");
-        if (IsLockedOut(user))
+        if (user.IsLockedOut(timeProvider.GetUtcNow()))
             throw new BusinessRuleException("This account is already locked.");
 
         // Locks only work while lockout is enabled for the user.
@@ -107,7 +107,7 @@ public class UserAdminService(
     {
         await EnsureActiveAdminAsync(adminId);
         var user = await FindUserAsync(userId);
-        if (!IsLockedOut(user))
+        if (!user.IsLockedOut(timeProvider.GetUtcNow()))
             throw new BusinessRuleException("This account isn't locked.");
 
         EnsureSucceeded(await userManager.SetLockoutEndDateAsync(user, null));
@@ -150,13 +150,9 @@ public class UserAdminService(
 
     private async Task EnsureActiveAdminAsync(string userId)
     {
-        var user = await userManager.FindByIdAsync(userId);
-        if (user is null || IsLockedOut(user) || !await userManager.IsInRoleAsync(user, Roles.Admin))
+        if (!await userManager.IsActiveInRoleAsync(userId, Roles.Admin, timeProvider.GetUtcNow()))
             throw new BusinessRuleException("Only admins can manage users.");
     }
-
-    // A null LockoutEnd means never locked; "null > now" is false.
-    private bool IsLockedOut(ApplicationUser user) => user.LockoutEnd > timeProvider.GetUtcNow();
 
     private async Task<ApplicationUser> FindUserAsync(string userId) =>
         await userManager.FindByIdAsync(userId)
