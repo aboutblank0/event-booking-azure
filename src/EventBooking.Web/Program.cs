@@ -39,6 +39,7 @@ builder.Services.AddEventBookingAuthorization();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<OrganiserApplicationService>();
 builder.Services.AddScoped<EventService>();
+builder.Services.AddScoped<UserAdminService>();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
