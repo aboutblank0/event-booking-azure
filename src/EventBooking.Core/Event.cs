@@ -73,6 +73,9 @@ public class Event
 
     public bool IsOrganisedBy(string userId) => OrganiserId == userId;
 
+    /// <summary>Never negative, even if capacity was somehow set below the bookings.</summary>
+    public int PlacesLeft(int confirmedBookings) => Math.Max(0, Capacity - confirmedBookings);
+
     public void UpdateDetails(string name, string description)
     {
         EnsureEditable();
