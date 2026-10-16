@@ -12,6 +12,7 @@
 
 @inject UserManager<ApplicationUser> UserManager
 @inject EventService Events
+@inject BookingService Bookings
 @inject IdentityRedirectManager RedirectManager
 
 <PageTitle>All events</PageTitle>
@@ -49,6 +50,7 @@
                         <th>Organiser</th>
                         <th>When (venue time)</th>
                         <th>Status</th>
+                        <th>Booked</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -67,6 +69,7 @@
                                     <span class="badge text-bg-warning">Hidden</span>
                                 }
                             </td>
+                            <td><a href="events/@ev.Id/attendees">@booked.GetValueOrDefault(ev.Id) / @ev.Capacity</a></td>
                             <td>
                                 @if (ev.Status == EventStatus.Published)
                                 {
@@ -86,6 +89,7 @@
 @code {
     private string adminId = "";
     private List<EventForAdmin>? events;
+    private Dictionary<int, int> booked = [];
     private string? errorMessage;
 
     [CascadingParameter]
@@ -99,6 +103,7 @@
         // The [Authorize] attribute means there is always a signed-in user here.
         adminId = UserManager.GetUserId(HttpContext.User)!;
         events = await Events.GetEventsForAdminAsync(adminId);
+        booked = await Bookings.GetConfirmedCountsAsync(events.Select(e => e.Event.Id).ToList());
     }
 
     private async Task CancelAsync()

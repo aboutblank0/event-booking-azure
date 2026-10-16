@@ -11,6 +11,7 @@
 
 @inject UserManager<ApplicationUser> UserManager
 @inject EventService Events
+@inject BookingService Bookings
 
 <PageTitle>My events</PageTitle>
 
@@ -39,6 +40,7 @@ else
                     <th>When (venue time)</th>
                     <th>Status</th>
                     <th>Images</th>
+                    <th>Booked</th>
                 </tr>
             </thead>
             <tbody>
@@ -49,6 +51,12 @@ else
                         <td>@VenueTime.FormatRange(ev.StartsAt, ev.EndsAt, ev.TimeZoneId)</td>
                         <td><EventStatusBadge Status="ev.Status" /></td>
                         <td>@ev.Images.Count / @Event.MaxImages</td>
+                        <td>
+                            @if (ev.Status != EventStatus.Draft)
+                            {
+                                <a href="events/@ev.Id/attendees">@booked.GetValueOrDefault(ev.Id) / @ev.Capacity</a>
+                            }
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -58,6 +66,7 @@ else
 
 @code {
     private List<Event>? events;
+    private Dictionary<int, int> booked = [];
     private string? errorMessage;
 
     [CascadingParameter]
@@ -69,6 +78,7 @@ else
         {
             // The [Authorize] attribute means there is always a signed-in user here.
             events = await Events.GetMyEventsAsync(UserManager.GetUserId(HttpContext.User)!);
+            booked = await Bookings.GetConfirmedCountsAsync(events.Select(e => e.Id).ToList());
         }
         catch (BusinessRuleException ex)
         {

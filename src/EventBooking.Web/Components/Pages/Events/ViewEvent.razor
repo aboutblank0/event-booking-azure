@@ -6,8 +6,13 @@
 @using EventBooking.Web.Data
 @using EventBooking.Web.Services
 @using EventBooking.Web.Storage
+@using EventBooking.Web.Components.Account
+@using EventBooking.Web.Components.Account.Shared
 
 @inject EventService Events
+@inject BookingService Bookings
+@inject TimeProvider TimeProvider
+@inject IdentityRedirectManager RedirectManager
 @inject ImageUrls ImageUrls
 @inject UserManager<ApplicationUser> UserManager
 @inject NavigationManager NavigationManager
@@ -18,18 +23,24 @@
 
     <h1>@ev.Name</h1>
 
+    <StatusMessage Message="@errorMessage" />
+
     @if (ev.Status == EventStatus.Draft)
     {
         <div class="alert alert-info">This is a draft. Only you can see it until it is published.</div>
     }
     else if (ev.Status == EventStatus.Cancelled)
     {
-        <div class="alert alert-warning">This event has been cancelled.</div>
+        <div class="alert alert-danger fw-bold">This event has been cancelled and won't take place.</div>
     }
 
     @if (userId is not null && ev.IsOrganisedBy(userId))
     {
         <p><a href="my-events/@ev.Id" class="btn btn-outline-primary btn-sm">Manage this event</a></p>
+    }
+    @if (CanSeeAttendees)
+    {
+        <p><a href="events/@ev.Id/attendees" class="btn btn-outline-secondary btn-sm">See who has booked</a></p>
     }
 
     <div class="row g-4">
@@ -62,9 +73,58 @@
                     @ev.VenueName<br />
                     @ev.Address
                 </dd>
-                <dt>Capacity</dt>
-                <dd>@ev.Capacity people</dd>
+                <dt>Places</dt>
+                <dd>
+                    @PlacesText.PlacesLeft(bookingInfo.PlacesLeft)
+                    <span class="text-body-secondary">(out of @PlacesText.Places(ev.Capacity))</span>
+                </dd>
             </dl>
+
+            @*
+                Always rendered: Blazor needs the form to exist to handle a POST, or a change made
+                meanwhile gets a bare "400 Bad Request" instead of our error message.
+            *@
+            <form method="post" @formname="booking" @onsubmit="HandleBookingAsync" class="mb-4">
+                <AntiforgeryToken />
+                @if (ev.Status == EventStatus.Draft || isOwnEvent)
+                {
+                    @* Nothing to book. *@
+                }
+                else if (bookingInfo.MyBooking is not null)
+                {
+                    @if (ev.Status == EventStatus.Cancelled)
+                    {
+                        <p class="fw-bold">You had a place at this event, but it has been cancelled.</p>
+                    }
+                    else
+                    {
+                        <p class="text-success fw-bold">You have a place at this event.</p>
+                        @if (ev.StartsAt > TimeProvider.GetUtcNow())
+                        {
+                            @* The clicked button sends its value as Action. *@
+                            <button type="submit" name="Action" value="cancel" class="btn btn-outline-danger"
+                                    onclick="return confirm('Cancel your booking?')">Cancel my booking</button>
+                        }
+                    }
+                }
+                else if (ev.Status == EventStatus.Cancelled)
+                {
+                    @* The alert at the top already says so. *@
+                }
+                else if (bookingInfo.ReasonCannotBook is { } reason)
+                {
+                    <div class="alert alert-secondary">@reason</div>
+                }
+                else if (userId is null)
+                {
+                    <a href="Account/Login?ReturnUrl=@Uri.EscapeDataString($"events/{ev.Id}")" class="btn btn-primary">Log in to book</a>
+                }
+                else
+                {
+                    <button type="submit" name="Action" value="book" class="btn btn-primary">Book a place</button>
+                }
+            </form>
+
             <event-map class="event-map rounded border mb-1" latitude="@Latitude" longitude="@Longitude"
                        data-permanent="event-map-view-@ev.Id"></event-map>
             <a href="https://www.openstreetmap.org/?mlat=@Latitude&mlon=@Longitude#map=17/@Latitude/@Longitude"
@@ -79,6 +139,9 @@
     private Event? ev;
     private List<EventImage> images = [];
     private string? userId;
+    private bool isOwnEvent;
+    private BookingInfo bookingInfo = new(0, null, null);
+    private string? errorMessage;
 
     [Parameter]
     public int Id { get; set; }
@@ -89,6 +152,13 @@
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "booking")]
+    private string? Action { get; set; }
+
+    // Drafts have no bookings. The service checks again before showing the list.
+    private bool CanSeeAttendees =>
+        ev!.Status != EventStatus.Draft && (isOwnEvent || HttpContext.User.IsInRole(Roles.Admin));
 
     protected override async Task OnInitializedAsync()
     {
@@ -103,5 +173,46 @@
         }
 
         images = ev.Images.OrderBy(i => i.SortOrder).ToList();
+        isOwnEvent = userId is not null && ev.IsOrganisedBy(userId);
+        bookingInfo = await Bookings.GetBookingInfoAsync(ev, userId);
+    }
+
+    private async Task HandleBookingAsync()
+    {
+        if (ev is null)
+            return;
+
+        string message;
+        try
+        {
+            if (userId is null)
+                throw new BusinessRuleException("Log in to book a place.");
+
+            if (Action == "book")
+            {
+                await Bookings.BookAsync(ev.Id, userId);
+                message = "You have a place at this event. It's listed under My bookings.";
+            }
+            else if (Action == "cancel")
+            {
+                var booking = bookingInfo.MyBooking
+                    ?? throw new BusinessRuleException("You don't have a booking for this event.");
+                await Bookings.CancelAsync(booking.Id, userId);
+                message = "Your booking has been cancelled.";
+            }
+            else
+            {
+                throw new BusinessRuleException("Choose whether to book or cancel.");
+            }
+        }
+        catch (BusinessRuleException ex)
+        {
+            errorMessage = "Error: " + ex.Message;
+            // The event may have filled up meanwhile, so show the current state.
+            bookingInfo = await Bookings.GetBookingInfoAsync(ev, userId);
+            return;
+        }
+
+        RedirectManager.RedirectToCurrentPageWithStatus(message, HttpContext);
     }
 }

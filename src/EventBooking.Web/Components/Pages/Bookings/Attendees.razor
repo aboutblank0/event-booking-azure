@@ -1,0 +1,93 @@
+@page "/events/{Id:int}/attendees"
+
+@using System.Globalization
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using EventBooking.Core
+@using EventBooking.Web.Data
+@using EventBooking.Web.Services
+@using EventBooking.Web.Components.Account.Shared
+
+@* Any signed-in user gets this far; the service only lets the organiser and admins see the list. *@
+@attribute [Authorize]
+
+@inject UserManager<ApplicationUser> UserManager
+@inject EventService Events
+@inject BookingService Bookings
+@inject NavigationManager NavigationManager
+
+@if (ev is not null)
+{
+    <PageTitle>Attendees: @ev.Name</PageTitle>
+
+    <h1>Attendees</h1>
+    <p class="lead"><a href="events/@ev.Id">@ev.Name</a>, @VenueTime.FormatRange(ev.StartsAt, ev.EndsAt, ev.TimeZoneId)</p>
+
+    <StatusMessage Message="@errorMessage" />
+
+    @if (attendees is not null)
+    {
+        <p>@attendees.Count booked, out of @PlacesText.Places(ev.Capacity).</p>
+
+        @if (attendees.Count > 0)
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Booked (venue time)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var attendee in attendees)
+                        {
+                            <tr>
+                                <td class="text-break">@attendee.Email</td>
+                                <td>@BookedAt(attendee)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+}
+
+@code {
+    private Event? ev;
+    private List<Attendee>? attendees;
+    private string? errorMessage;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The [Authorize] attribute means there is always a signed-in user here.
+        var userId = UserManager.GetUserId(HttpContext.User)!;
+        ev = await Events.GetEventAsync(Id, userId);
+        if (ev is null)
+        {
+            // Responds with 404 and shows the app's Not Found page.
+            NavigationManager.NotFound();
+            return;
+        }
+
+        try
+        {
+            attendees = await Bookings.GetAttendeesAsync(Id, userId);
+        }
+        catch (BusinessRuleException ex)
+        {
+            errorMessage = "Error: " + ex.Message;
+        }
+    }
+
+    // Invariant culture, so month names don't depend on the server's language settings.
+    private string BookedAt(Attendee attendee) =>
+        VenueTime.ToLocal(attendee.BookedAt, ev!.TimeZoneId).ToString("d MMM yyyy, HH:mm", CultureInfo.InvariantCulture);
+}
