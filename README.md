@@ -37,22 +37,8 @@ I make the design decisions and aim to understand every line.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    user([Browser]) -->|HTTPS| app
-
-    subgraph Azure ["Azure (free tiers)"]
-        app["App Service (F1, Linux)<br/>Blazor static server rendering"]
-        sql[("Azure SQL Database<br/>free serverless offer")]
-        blob[("Blob Storage<br/>event images")]
-    end
-
-    app --> sql
-    app -->|managed identity| blob
-    user -->|images served directly| blob
-
-    gh["GitHub Actions"] -->|"OIDC login, then deploy"| app
-```
+Hosted on Azure App Service, with Azure SQL for data and Blob Storage for event images. GitHub
+Actions deploys it, signing in to Azure without stored credentials.
 
 **Stack:** .NET 10 · Blazor · ASP.NET Core Identity · EF Core 10 · SQL Server · Azure Blob Storage ·
 xUnit · Testcontainers · GitHub Actions
