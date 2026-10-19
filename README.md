@@ -3,57 +3,45 @@
 [![CI](https://github.com/aboutblank0/event-booking-azure/actions/workflows/ci.yml/badge.svg)](https://github.com/aboutblank0/event-booking-azure/actions/workflows/ci.yml)
 [![Deploy](https://github.com/aboutblank0/event-booking-azure/actions/workflows/deploy.yml/badge.svg)](https://github.com/aboutblank0/event-booking-azure/actions/workflows/deploy.yml)
 
-A web app where organisers publish events and people book places at them, built with
-**.NET 10, Blazor and ASP.NET Core Identity** and running on **Azure** entirely on free tiers.
+A web app where organisers publish events and people book places at them.
 
-**Live site:** <https://jc-eventbooking-f3e9bwgyfyd4fbcg.ukwest-01.azurewebsites.net>
-(free tier: the first request after a quiet spell can take a few seconds)
+Live site: <https://jc-eventbooking-f3e9bwgyfyd4fbcg.ukwest-01.azurewebsites.net>
+(it runs on a free tier, so the first page load can take a few seconds)
 
-## About this project
+## About
 
-I built this to learn **Azure and modern .NET**, starting with no Azure experience, and to practise
-**agentic coding** with [Claude Code](https://claude.com/claude-code) as a pair programmer. Every
-feature is designed first, then built in small reviewed pull requests, with tests for every business rule.
-I make the design decisions and aim to understand every line.
+I made this project to learn .NET and Azure, which I hadn't used before. I wrote it with
+[Claude Code](https://claude.com/claude-code), designing each feature first and building it in
+small pull requests.
 
 ## Features
 
-- **Everyone:** browse upcoming events with images, a venue map and places left; times shown in the
-  venue's time zone.
-- **Users:** book and cancel places, see upcoming and past bookings, apply to become an organiser.
-  Accounts support email confirmation, two-factor authentication and passkeys.
-- **Organisers:** create, edit, publish and cancel events with image galleries, and see who is attending.
-- **Admins:** review organiser applications, manage user roles, lock accounts and cancel any event.
+- Browse upcoming events, with images, a map of the venue and the number of places left.
+- Book a place and cancel it, and see your upcoming and past bookings.
+- Apply to become an organiser. Organisers can create, publish and cancel events and see who is attending.
+- Admins review organiser applications and manage users.
+- Accounts with email confirmation, two-factor authentication and passkeys.
 
-## Technical highlights
+## What I used
 
-- **Concurrency handled correctly:** no double-booking, overbooking or lost updates, with each race
-  condition reproduced in a test against a real SQL Server.
-- **Permissions enforced at the moment of the action**, with role changes and lockouts taking effect immediately.
-- **Secure image uploads** validated by content, with size and storage limits.
-- **No secrets in the repository**, and passwordless access to Azure from both the app and CI.
-- **Business rules in a separate Core project**, tested in isolation with an injectable clock.
-- **Correct time zone handling**, including clock changes.
+- .NET 10, Blazor, ASP.NET Core Identity and EF Core
+- Azure App Service, Azure SQL and Blob Storage, all on free tiers
+- GitHub Actions to test every pull request and deploy every merge to `main`
+- xUnit and Testcontainers for tests (256 so far)
 
-## Architecture
+## Things it handles
 
-Hosted on Azure App Service, with Azure SQL for data and Blob Storage for event images. GitHub
-Actions deploys it, signing in to Azure without stored credentials.
+- Concurrency, so two people can't book the last place and edits don't overwrite each other.
+- Permissions, so role changes and locked accounts take effect straight away.
+- Image uploads, checked by file content and limited in size.
+- Time zones: event times are shown as they are at the venue.
+- No secrets are stored in the code, and the app and GitHub Actions sign in to Azure without passwords.
 
-**Stack:** .NET 10 · Blazor · ASP.NET Core Identity · EF Core 10 · SQL Server · Azure Blob Storage ·
-xUnit · Testcontainers · GitHub Actions
+## Project structure
 
-| Project | Contents |
-|---------|----------|
-| `src/EventBooking.Core` | Entities and business rules |
-| `src/EventBooking.Web` | Blazor pages, services, database, Identity, storage |
-| `tests/EventBooking.Tests` | Unit and integration tests |
-
-## Testing and deployment
-
-- **256 tests**, with database tests running against a real SQL Server in Docker.
-- **CI** builds and tests every pull request; every merge to `main` is deployed to Azure automatically.
-- **Free tiers only:** App Service F1, Azure SQL free offer, and Blob Storage, with a budget alert.
+- `src/EventBooking.Core`: entities and business rules
+- `src/EventBooking.Web`: Blazor pages, services, database and Identity
+- `tests/EventBooking.Tests`: unit and integration tests
 
 ## Roadmap
 
