@@ -23,9 +23,6 @@
     [SupplyParameterFromQuery]
     private string? Email { get; set; }
 
-    [SupplyParameterFromQuery]
-    private string? ReturnUrl { get; set; }
-
     protected override async Task OnInitializedAsync()
     {
         if (Email is null)

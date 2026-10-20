@@ -19,14 +19,12 @@ public sealed class SmtpEmailSender : IEmailSender
 
     public async Task SendEmailAsync(string email, string subject, string htmlMessage)
     {
-        var test = new MailMessage(senderAddress, email, subject, htmlMessage)
+        using var message = new MailMessage(senderAddress, email, subject, htmlMessage)
         {
             IsBodyHtml = true
         };
 
-        using (var client = new SmtpClient(host, port))
-        {
-            await client.SendMailAsync(test);
-        }
+        using var client = new SmtpClient(host, port);
+        await client.SendMailAsync(message);
     }
 }

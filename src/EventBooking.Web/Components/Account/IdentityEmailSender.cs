@@ -1,5 +1,3 @@
-using System;
-
 using EventBooking.Web.Data;
 
 using Microsoft.AspNetCore.Identity;

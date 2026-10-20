@@ -57,9 +57,9 @@ if (builder.Environment.IsDevelopment())
     var smtpPort = builder.Configuration.GetValue<int>("Email:SmtpPort");
     var smtpSender = builder.Configuration["Email:SenderAddress"];
 
-    if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpSender))
+    if (string.IsNullOrEmpty(smtpHost) || smtpPort <= 0 || string.IsNullOrEmpty(smtpSender))
     {
-        throw new InvalidOperationException("Email:SmtpHost and Email:SenderAddress must be set in development.");
+        throw new InvalidOperationException("Email:SmtpHost, Email:SmtpPort and Email:SenderAddress must be set in development.");
     }
     builder.Services.AddSingleton<IEmailSender>(sp => new SmtpEmailSender(smtpHost, smtpPort, smtpSender));
 }
