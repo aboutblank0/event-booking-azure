@@ -9,6 +9,8 @@ using EventBooking.Web.Components.Account;
 using EventBooking.Web.Data;
 using EventBooking.Web.Services;
 using EventBooking.Web.Storage;
+using Microsoft.AspNetCore.Identity.UI.Services;
+using Azure.Communication.Email;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,13 +44,34 @@ builder.Services.AddScoped<EventService>();
 builder.Services.AddScoped<UserAdminService>();
 builder.Services.AddScoped<BookingService>();
 
-builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
-
 // Blob Storage signs in without keys: as the `az login` user locally, and with the App Service's
 // managed identity on Azure. (DefaultAzureCredential can hang outside Azure, so choose explicitly.)
 TokenCredential azureCredential = builder.Environment.IsDevelopment()
     ? new AzureCliCredential()
     : new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned);
+
+// Setup email sending.
+if (builder.Environment.IsDevelopment())
+{
+    var smtpHost = builder.Configuration["Email:SmtpHost"];
+    var smtpPort = builder.Configuration.GetValue<int>("Email:SmtpPort");
+    var smtpSender = builder.Configuration["Email:SenderAddress"];
+
+    if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpSender))
+    {
+        throw new InvalidOperationException("Email:SmtpHost and Email:SenderAddress must be set in development.");
+    }
+    builder.Services.AddSingleton<IEmailSender>(sp => new SmtpEmailSender(smtpHost, smtpPort, smtpSender));
+}
+else
+{
+    var emailEndpoint = builder.Configuration["Email:Endpoint"] ?? throw new InvalidOperationException("Setting 'Email:Endpoint' not found.");
+    var senderAddress = builder.Configuration["Email:SenderAddress"] ?? throw new InvalidOperationException("Setting 'Email:SenderAddress' not found.");
+    builder.Services.AddSingleton<IEmailSender>(sp => new AzureEmailSender(new EmailClient(new Uri(emailEndpoint), azureCredential), senderAddress));
+}
+builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityEmailSender>();
+
+
 var blobEndpoint = builder.Configuration["Storage:BlobEndpoint"] ?? throw new InvalidOperationException("Setting 'Storage:BlobEndpoint' not found.");
 var imagesContainer = builder.Configuration["Storage:ImagesContainer"] ?? throw new InvalidOperationException("Setting 'Storage:ImagesContainer' not found.");
 var maxImageCount = builder.Configuration.GetValue<int>("Storage:MaxImageCount");
