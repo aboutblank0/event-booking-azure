@@ -1,9 +1,11 @@
 @page "/Account/RegisterOrganiser"
+@attribute [EnableRateLimiting(EmailRateLimiting.Policy)]
 
 @using System.ComponentModel.DataAnnotations
 @using System.Text
 @using System.Text.Encodings.Web
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.RateLimiting
 @using Microsoft.AspNetCore.WebUtilities
 @using EventBooking.Core
 @using EventBooking.Web.Data

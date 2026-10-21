@@ -81,6 +81,7 @@ builder.Services.AddSingleton(sp => new ImageStorage(
 builder.Services.AddSingleton<IImageStorage>(sp => sp.GetRequiredService<ImageStorage>());
 builder.Services.AddSingleton(new ImageUrls(new Uri(blobEndpoint), imagesContainer));
 builder.Services.AddStorageRateLimiting();
+builder.Services.AddEmailRateLimiting();
 
 var app = builder.Build();
 
