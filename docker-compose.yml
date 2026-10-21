@@ -7,5 +7,9 @@ services:
     ports: ["1433:1433"]
     volumes: ["sqldata:/var/opt/mssql"]
 
+  mailpit:
+    image: axllent/mailpit:v1.31.6
+    ports: ["1025:1025", "8025:8025"]
+
 volumes:
   sqldata:
