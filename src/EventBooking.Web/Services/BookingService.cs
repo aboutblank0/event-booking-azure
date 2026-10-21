@@ -27,6 +27,7 @@ public record Attendee(string? Email, DateTimeOffset BookedAt);
 public class BookingService(
     ApplicationDbContext db,
     UserManager<ApplicationUser> userManager,
+    AttendeeEmails emails,
     TimeProvider timeProvider)
 {
     /// <summary>
@@ -60,12 +61,17 @@ public class BookingService(
     /// Books a place. If another request changed the event at the same time, checks again once with
     /// fresh data, so the user gets the real reason (e.g. the event is now full).
     /// </summary>
-    public Task<Booking> BookAsync(int eventId, string userId) =>
-        RetryOnceAsync(() => TryBookAsync(eventId, userId));
+    public async Task<Booking> BookAsync(int eventId, string userId)
+    {
+        var booking = await RetryOnceAsync(() => TryBookAsync(eventId, userId));
+        await EmailUserAsync(userId, eventId, emails.SendBookedAsync);
+        return booking;
+    }
 
     /// <summary>Cancels the user's own booking, freeing the place.</summary>
-    public Task CancelAsync(int bookingId, string userId) =>
-        RetryOnceAsync(async () =>
+    public async Task CancelAsync(int bookingId, string userId)
+    {
+        var eventId = await RetryOnceAsync(async () =>
         {
             var booking = await db.Bookings.SingleOrDefaultAsync(b => b.Id == bookingId);
             if (booking is null || !booking.IsBookedBy(userId))
@@ -75,8 +81,10 @@ public class BookingService(
             booking.Cancel(ev, Now);
             MarkEventChanged(ev);
             await db.SaveChangesAsync();
-            return true;
+            return ev.Id;
         });
+        await EmailUserAsync(userId, eventId, emails.SendBookingCancelledAsync);
+    }
 
     /// <summary>The user's confirmed bookings: events that haven't ended, then past ones.</summary>
     public async Task<MyBookings> GetMyBookingsAsync(string userId)
@@ -140,6 +148,13 @@ public class BookingService(
             throw new BusinessRuleException("You have already booked this event.");
         }
         return booking;
+    }
+
+    private async Task EmailUserAsync(string userId, int eventId, Func<string, Event, Task> send)
+    {
+        var email = await db.Users.Where(u => u.Id == userId).Select(u => u.Email).SingleOrDefaultAsync();
+        if (email is not null)
+            await send(email, await db.Events.SingleAsync(e => e.Id == eventId));
     }
 
     private async Task<T> RetryOnceAsync<T>(Func<Task<T>> attempt)

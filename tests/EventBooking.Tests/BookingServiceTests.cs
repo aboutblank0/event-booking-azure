@@ -16,6 +16,8 @@ public class BookingServiceTests(SqlServerFixture database)
     private static readonly DateTimeOffset Now = new(2026, 10, 14, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset NextWeek = Now.AddDays(7);
 
+    private readonly FakeEmailSender _emails = new();
+
     /// <summary>
     /// Runs <paramref name="action"/> with a service from a fresh scope. <paramref name="beforeSave"/>
     /// runs just before the service first saves, like another request saving first.
@@ -28,7 +30,7 @@ public class BookingServiceTests(SqlServerFixture database)
         await using var db = TestDbContextFactory.Create(database.ConnectionString,
             new BeforeSaveInterceptor(beforeSave ?? (() => Task.CompletedTask)));
         var service = ActivatorUtilities.CreateInstance<BookingService>(
-            scope.ServiceProvider, db, new FixedTimeProvider(now ?? Now));
+            scope.ServiceProvider, db, _emails.CreateAttendeeEmails(), new FixedTimeProvider(now ?? Now));
         return await action(service);
     }
 
@@ -105,6 +107,31 @@ public class BookingServiceTests(SqlServerFixture database)
 
         Assert.Equal(BookingStatus.Confirmed, booking.Status);
         Assert.Equal(Now, booking.BookedAt);
+        Assert.Equal(1, await CountConfirmedAsync(ev.Id));
+    }
+
+    [Fact]
+    public async Task Book_EmailsTheUser()
+    {
+        var ev = await CreatePublishedEventAsync();
+        var userId = await database.CreateUserAsync();
+
+        await BookAsync(ev.Id, userId);
+
+        var sent = Assert.Single(_emails.Sent);
+        Assert.Equal(await EmailOfAsync(userId), sent.To);
+        Assert.Equal("Booking confirmed: Lisbon Tech Meetup", sent.Subject);
+        Assert.Contains($"https://events.example/events/{ev.Id}", sent.HtmlMessage);
+    }
+
+    [Fact]
+    public async Task Book_StillBooksWhenTheEmailFails()
+    {
+        var ev = await CreatePublishedEventAsync();
+        _emails.Fail = true;
+
+        await BookAsync(ev.Id, await database.CreateUserAsync());
+
         Assert.Equal(1, await CountConfirmedAsync(ev.Id));
     }
 
@@ -244,6 +271,20 @@ public class BookingServiceTests(SqlServerFixture database)
 
         Assert.Equal(0, await CountConfirmedAsync(ev.Id));
         await BookAsync(ev.Id, await database.CreateUserAsync());
+    }
+
+    [Fact]
+    public async Task Cancel_EmailsTheUser()
+    {
+        var ev = await CreatePublishedEventAsync();
+        var userId = await database.CreateUserAsync();
+        var booking = await BookAsync(ev.Id, userId);
+
+        await WithServiceAsync(s => s.CancelAsync(booking.Id, userId));
+
+        var sent = _emails.Sent.Last();
+        Assert.Equal(await EmailOfAsync(userId), sent.To);
+        Assert.Equal("Booking cancelled: Lisbon Tech Meetup", sent.Subject);
     }
 
     [Fact]
