@@ -26,6 +26,7 @@ small pull requests.
 
 - .NET 10, Blazor, ASP.NET Core Identity and EF Core
 - Azure App Service, Azure SQL and Blob Storage, all on free tiers
+- Azure Communication Services to send emails (paid per email, a fraction of a cent each)
 - GitHub Actions to test every pull request and deploy every merge to `main`
 - xUnit and Testcontainers for tests (256 so far)
 
@@ -47,7 +48,7 @@ small pull requests.
 
 - [ ] Infrastructure as code with Bicep
 - [ ] Monitoring with Application Insights and a health check
-- [ ] Real emails (confirmations and cancellation notices)
+- [ ] Email attendees when an event is cancelled
 - [ ] Let organisers who have events delete their account
 
 ## Running it yourself
@@ -64,12 +65,18 @@ Needs the .NET 10 SDK, Docker and the Azure CLI.
    ```
 
 3. Run `az login`. Your account needs the **Storage Blob Data Contributor** role on the storage account.
-4. Start the database and the app:
+4. Start the database, a local email inbox and the app:
 
    ```bash
    docker compose up -d
    dotnet watch --project src/EventBooking.Web
    ```
 
+   Emails sent while developing go to the local inbox at <http://localhost:8025>, not to real addresses.
+
 The `Admin:Email` user gets the Admin role at startup, once registered and confirmed. On Azure, register
 and confirm the admin account on the live site first, then add the app setting `Admin__Email`.
+
+On Azure, emails need the app settings `Email__Endpoint` and `Email__SenderAddress` (from the Communication
+Services resource), and the App Service's managed identity needs the **Communication and Email Service Owner**
+role on that resource.
