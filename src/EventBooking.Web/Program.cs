@@ -43,6 +43,7 @@ builder.Services.AddScoped<OrganiserApplicationService>();
 builder.Services.AddScoped<EventService>();
 builder.Services.AddScoped<UserAdminService>();
 builder.Services.AddScoped<BookingService>();
+builder.Services.AddScoped<AttendeeEmails>();
 
 // Blob Storage signs in without keys: as the `az login` user locally, and with the App Service's
 // managed identity on Azure. (DefaultAzureCredential can hang outside Azure, so choose explicitly.)
