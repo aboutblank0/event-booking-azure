@@ -12,3 +12,4 @@ jobs:
         with: { global-json-file: global.json }   # the version you pinned
       - run: dotnet build
       - run: dotnet test
+      - run: az bicep build --file infra/main.bicep --stdout > /dev/null   # checks the Bicep compiles
