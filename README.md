@@ -27,6 +27,7 @@ small pull requests.
 
 - .NET 10, Blazor, ASP.NET Core Identity and EF Core
 - Azure App Service, Azure SQL and Blob Storage, all on free tiers
+- Bicep to define all the Azure resources as code
 - Azure Communication Services to send emails (paid per email, a fraction of a cent each)
 - GitHub Actions to test every pull request and deploy every merge to `main`
 - xUnit and Testcontainers for tests (267 so far)
@@ -37,13 +38,14 @@ small pull requests.
 - Permissions, so role changes and locked accounts take effect straight away.
 - Image uploads, checked by file content and limited in size.
 - Time zones: event times are shown as they are at the venue.
-- No secrets are stored in the code, and the app and GitHub Actions sign in to Azure without passwords.
+- No secrets are stored in the code, and the app and GitHub Actions sign in to Azure (including the database) without passwords.
 
 ## Project structure
 
 - `src/EventBooking.Core`: entities and business rules
 - `src/EventBooking.Web`: Blazor pages, services, database and Identity
 - `tests/EventBooking.Tests`: unit and integration tests
+- `infra`: Bicep files for the Azure resources
 
 ## Running it yourself
 
@@ -68,9 +70,37 @@ Needs the .NET 10 SDK, Docker and the Azure CLI.
 
    Emails sent while developing go to the local inbox at <http://localhost:8025>, not to real addresses.
 
-The `Admin:Email` user gets the Admin role at startup, once registered and confirmed. On Azure, register
-and confirm the admin account on the live site first, then add the app setting `Admin__Email`.
+The `Admin:Email` user gets the Admin role at startup, once registered and confirmed.
 
-On Azure, emails need the app settings `Email__Endpoint` and `Email__SenderAddress` (from the Communication
-Services resource), and the App Service's managed identity needs the **Communication and Email Service Owner**
-role on that resource.
+## Deploying to Azure
+
+The Azure resources are defined in `infra/main.bicep`. Their names and regions are in `infra/main.bicepparam`;
+change them to deploy your own copy.
+
+1. Create a resource group and deploy the resources. Whoever runs this becomes the database admin.
+
+   ```bash
+   az group create --name <resource-group> --location uksouth
+   export ADMIN_EMAIL=<your email>
+   az deployment group what-if --resource-group <resource-group> --parameters infra/main.bicepparam
+   az deployment group create --resource-group <resource-group> --parameters infra/main.bicepparam
+   ```
+
+   `what-if` previews the changes without applying them. Run both commands again whenever `infra/` changes.
+
+2. Give the app access to the database. In the Azure portal, open the database's Query editor, sign in with
+   Microsoft Entra (allow your IP address when asked) and run this, using your web app's name:
+
+   ```sql
+   CREATE USER [<app-name>] FROM EXTERNAL PROVIDER;
+   ALTER ROLE db_datareader ADD MEMBER [<app-name>];
+   ALTER ROLE db_datawriter ADD MEMBER [<app-name>];
+   ALTER ROLE db_ddladmin ADD MEMBER [<app-name>];
+   ```
+
+3. For the deploy workflow, create a Microsoft Entra app registration with a federated credential for your
+   GitHub repository and the Contributor role on the web app. Add its IDs as the GitHub secrets
+   `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`, and set `app-name` in
+   `.github/workflows/deploy.yml`.
+4. After the code is deployed, register and confirm the admin account on the site, then restart the app
+   (`az webapp restart`) so it gets the Admin role.
