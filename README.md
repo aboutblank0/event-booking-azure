@@ -10,9 +10,10 @@ Live site: <https://jc-eventbooking-f3e9bwgyfyd4fbcg.ukwest-01.azurewebsites.net
 
 ## About
 
-I made this project to learn .NET and Azure, which I hadn't used before. I wrote it with
-[Claude Code](https://claude.com/claude-code), designing each feature first and building it in
-small pull requests.
+I made this project to learn three things: modern .NET, Azure's cloud services, and agentic coding
+with [Claude Code](https://claude.com/claude-code). For each feature I worked out a short design with
+Claude Code, had it build the feature in small pull requests, and reviewed each one before merging.
+Project rules, such as free tiers only and no secrets in code, live in a file it reads every session.
 
 ## Features
 
@@ -60,7 +61,8 @@ Needs the .NET 10 SDK, Docker and the Azure CLI.
    dotnet user-secrets set "Admin:Email" "<your email>" --project src/EventBooking.Web
    ```
 
-3. Run `az login`. Your account needs the **Storage Blob Data Contributor** role on the storage account.
+3. Run `az login`. Your account needs the **Storage Blob Data Contributor** role on the storage account
+   (for example the one created in [Deploying to Azure](#deploying-to-azure) below).
 4. Start the database, a local email inbox and the app:
 
    ```bash
