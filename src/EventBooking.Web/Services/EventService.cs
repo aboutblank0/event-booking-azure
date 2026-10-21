@@ -34,6 +34,7 @@ public class EventService(
     ApplicationDbContext db,
     UserManager<ApplicationUser> userManager,
     IImageStorage imageStorage,
+    AttendeeEmails emails,
     TimeProvider timeProvider)
 {
     /// <summary>Published events that haven't ended, soonest first, for anyone to browse.</summary>
@@ -108,7 +109,10 @@ public class EventService(
         return ev;
     }
 
-    /// <summary>Saves the form's values. Dates count as changed only if they differ from the saved ones.</summary>
+    /// <summary>
+    /// Saves the form's values. Dates and venue count as changed only if they differ from the saved
+    /// ones; a new venue is emailed to the attendees.
+    /// </summary>
     public async Task UpdateAsync(int eventId, string userId, EventDetails details)
     {
         var ev = await FindOwnEventAsync(eventId, userId);
@@ -117,12 +121,16 @@ public class EventService(
         // A published event's dates can't change, but its edit form still sends them back unchanged.
         if (ev.StartsAt != details.StartsAt || ev.EndsAt != details.EndsAt || ev.TimeZoneId != details.TimeZoneId)
             ev.ChangeSchedule(details.StartsAt, details.EndsAt, details.TimeZoneId, timeProvider.GetUtcNow());
+        var oldVenue = (ev.VenueName, ev.Address);
         ev.ChangeVenue(details.VenueName, details.Address, details.Latitude, details.Longitude);
+        var venueChanged = oldVenue != (ev.VenueName, ev.Address);
         var confirmedBookings = await db.Bookings.CountAsync(
             b => b.EventId == eventId && b.Status == BookingStatus.Confirmed);
         ev.ChangeCapacity(details.Capacity, confirmedBookings);
 
         await SaveAsync();
+        if (venueChanged)
+            await emails.SendVenueChangedAsync(await AttendeeEmailsAsync(eventId), ev);
     }
 
     /// <summary>Uploads an image into the event and returns its new blob name.</summary>
@@ -188,7 +196,9 @@ public class EventService(
             await imageStorage.DeleteAsync(blobName, cancellationToken);
     }
 
-    /// <summary>Organisers can cancel their own published events; admins can cancel any.</summary>
+    /// <summary>
+    /// Organisers can cancel their own published events; admins can cancel any. Attendees are emailed.
+    /// </summary>
     public async Task CancelAsync(int eventId, string userId)
     {
         var ev = await IsActiveInRoleAsync(userId, Roles.Admin)
@@ -196,6 +206,16 @@ public class EventService(
             : await FindOwnEventAsync(eventId, userId);
         ev.Cancel(timeProvider.GetUtcNow());
         await SaveAsync();
+        await emails.SendEventCancelledAsync(await AttendeeEmailsAsync(eventId), ev);
+    }
+
+    private async Task<List<string>> AttendeeEmailsAsync(int eventId)
+    {
+        var addresses = await db.Bookings
+            .Where(b => b.EventId == eventId && b.Status == BookingStatus.Confirmed)
+            .Join(db.Users, b => b.UserId, u => u.Id, (b, u) => u.Email)
+            .ToListAsync();
+        return addresses.OfType<string>().ToList();
     }
 
     /// <summary>

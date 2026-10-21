@@ -18,6 +18,7 @@ public class EventServiceTests(SqlServerFixture database)
     private static readonly DateTimeOffset NextWeek = Now.AddDays(7);
 
     private readonly FakeImageStorage _storage = new();
+    private readonly FakeEmailSender _emails = new();
 
     private static EventDetails Details(string name = "Lisbon Tech Meetup", DateTimeOffset? startsAt = null) =>
         new(name, "Talks and networking.", startsAt ?? NextWeek, (startsAt ?? NextWeek).AddHours(3),
@@ -35,7 +36,7 @@ public class EventServiceTests(SqlServerFixture database)
         await using var db = TestDbContextFactory.Create(database.ConnectionString,
             new BeforeSaveInterceptor(beforeSave ?? (() => Task.CompletedTask)));
         var service = ActivatorUtilities.CreateInstance<EventService>(
-            scope.ServiceProvider, db, _storage, new FixedTimeProvider(now ?? Now));
+            scope.ServiceProvider, db, _storage, _emails.CreateAttendeeEmails(), new FixedTimeProvider(now ?? Now));
         return await action(service);
     }
 
@@ -63,6 +64,22 @@ public class EventServiceTests(SqlServerFixture database)
         await AddImageAsync(ev.Id, organiserId);
         await WithServiceAsync(s => s.PublishAsync(ev.Id, organiserId));
         return ev;
+    }
+
+    /// <summary>Books a place for a new user, and returns their email address.</summary>
+    private async Task<string> AddBookingAsync(int eventId, bool cancelled = false)
+    {
+        var userId = await database.CreateUserAsync();
+        await using var db = database.CreateContext();
+        var ev = await db.Events.SingleAsync(e => e.Id == eventId);
+        var user = await db.Users.SingleAsync(u => u.Id == userId);
+        var confirmed = await db.Bookings.CountAsync(b => b.EventId == eventId && b.Status == BookingStatus.Confirmed);
+        var booking = Booking.Create(ev, user.Id, confirmed, false, Now);
+        if (cancelled)
+            booking.Cancel(ev, Now);
+        db.Bookings.Add(booking);
+        await db.SaveChangesAsync();
+        return user.Email!;
     }
 
     private async Task<Event> LoadAsync(int id)
@@ -192,6 +209,33 @@ public class EventServiceTests(SqlServerFixture database)
         Assert.Equal(2, (await LoadAsync(ev.Id)).Capacity);
     }
 
+    [Fact]
+    public async Task Update_NewVenue_EmailsConfirmedAttendees()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreatePublishedEventAsync(organiserId);
+        var attendeeEmail = await AddBookingAsync(ev.Id);
+        await AddBookingAsync(ev.Id, cancelled: true);
+
+        await WithServiceAsync(s => s.UpdateAsync(ev.Id, organiserId, Details() with { VenueName = "Porto Hall" }));
+
+        var sent = Assert.Single(_emails.Sent);
+        Assert.Equal(attendeeEmail, sent.To);
+        Assert.Contains("Porto Hall", sent.HtmlMessage);
+    }
+
+    [Fact]
+    public async Task Update_SameVenue_SendsNoEmail()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreatePublishedEventAsync(organiserId);
+        await AddBookingAsync(ev.Id);
+
+        await WithServiceAsync(s => s.UpdateAsync(ev.Id, organiserId, Details("Renamed")));
+
+        Assert.Empty(_emails.Sent);
+    }
+
     // ---------- Images ----------
 
     [Fact]
@@ -272,6 +316,34 @@ public class EventServiceTests(SqlServerFixture database)
         var loaded = await LoadAsync(ev.Id);
         Assert.Equal(EventStatus.Cancelled, loaded.Status);
         Assert.Equal(Now, loaded.CancelledAt);
+    }
+
+    [Fact]
+    public async Task Cancel_EmailsEveryConfirmedAttendee()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreatePublishedEventAsync(organiserId);
+        var first = await AddBookingAsync(ev.Id);
+        var second = await AddBookingAsync(ev.Id);
+        await AddBookingAsync(ev.Id, cancelled: true);
+
+        await WithServiceAsync(s => s.CancelAsync(ev.Id, organiserId));
+
+        Assert.Equal(new[] { first, second }.Order(), _emails.Sent.Select(e => e.To).Order());
+        Assert.All(_emails.Sent, e => Assert.StartsWith("Event cancelled", e.Subject));
+    }
+
+    [Fact]
+    public async Task Cancel_StillCancelsWhenEmailsFail()
+    {
+        var organiserId = await database.CreateUserAsync(Roles.Organiser);
+        var ev = await CreatePublishedEventAsync(organiserId);
+        await AddBookingAsync(ev.Id);
+        _emails.Fail = true;
+
+        await WithServiceAsync(s => s.CancelAsync(ev.Id, organiserId));
+
+        Assert.Equal(EventStatus.Cancelled, (await LoadAsync(ev.Id)).Status);
     }
 
     [Fact]

@@ -18,6 +18,7 @@ small pull requests.
 
 - Browse upcoming events, with images, a map of the venue and the number of places left.
 - Book a place and cancel it, and see your upcoming and past bookings.
+- Attendees get an email when they book or cancel, and when an event they booked is cancelled or moves venue.
 - Apply to become an organiser. Organisers can create, publish and cancel events and see who is attending.
 - Admins review organiser applications and manage users.
 - Accounts with email confirmation, two-factor authentication and passkeys.
@@ -28,7 +29,7 @@ small pull requests.
 - Azure App Service, Azure SQL and Blob Storage, all on free tiers
 - Azure Communication Services to send emails (paid per email, a fraction of a cent each)
 - GitHub Actions to test every pull request and deploy every merge to `main`
-- xUnit and Testcontainers for tests (256 so far)
+- xUnit and Testcontainers for tests (267 so far)
 
 ## Things it handles
 
@@ -43,13 +44,6 @@ small pull requests.
 - `src/EventBooking.Core`: entities and business rules
 - `src/EventBooking.Web`: Blazor pages, services, database and Identity
 - `tests/EventBooking.Tests`: unit and integration tests
-
-## Roadmap
-
-- [ ] Infrastructure as code with Bicep
-- [ ] Monitoring with Application Insights and a health check
-- [ ] Email attendees when an event is cancelled
-- [ ] Let organisers who have events delete their account
 
 ## Running it yourself
 
