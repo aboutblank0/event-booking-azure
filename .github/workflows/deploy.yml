@@ -1,6 +1,7 @@
 name: Deploy
 on:
   push: { branches: [main] }
+  workflow_dispatch:     # adds a "Run workflow" button in the Actions tab
 permissions:
   id-token: write      # allows the job to request an OIDC token
   contents: read
