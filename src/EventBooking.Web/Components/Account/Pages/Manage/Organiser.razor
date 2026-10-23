@@ -11,7 +11,7 @@
 
 <PageTitle>Become an organiser</PageTitle>
 
-<h3>Become an organiser</h3>
+<h2 class="h4 mb-3">Become an organiser</h2>
 <StatusMessage Message="@errorMessage" />
 
 @if (latest is { Status: ApplicationStatus.Pending })
@@ -49,7 +49,7 @@ else if (reasonCannotApply is not null && latest?.Status != ApplicationStatus.Pe
                 <DataAnnotationsValidator />
                 <ValidationSummary class="text-danger" role="alert" />
                 <OrganiserApplicationFields Input="Input" />
-                <button type="submit" class="w-100 btn btn-lg btn-primary">Apply</button>
+                <button type="submit" class="w-100 btn btn-primary">Apply</button>
             }
         </EditForm>
     </div>
