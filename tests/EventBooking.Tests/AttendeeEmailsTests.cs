@@ -30,6 +30,17 @@ public class AttendeeEmailsTests
     }
 
     [Fact]
+    public async Task Emails_UseTheSharedLayoutWithAButton()
+    {
+        await _sender.CreateAttendeeEmails().SendBookedAsync("ana@example.com", CreateEvent());
+
+        var html = Assert.Single(_sender.Sent).HtmlMessage;
+        Assert.StartsWith("<!DOCTYPE html>", html);
+        Assert.Contains(">View the event</a>", html);
+        Assert.Contains("you have an account on Event Booking", html);
+    }
+
+    [Fact]
     public async Task OrganiserText_IsHtmlEncoded()
     {
         var ev = CreateEvent(name: "<b>Party</b>", venueName: "Tom & Jerry's");

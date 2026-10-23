@@ -41,7 +41,7 @@ public class AttendeeEmails(IEmailSender emailSender, NavigationManager navigati
     {
         try
         {
-            await emailSender.SendEmailAsync(email, subject, htmlMessage);
+            await emailSender.SendEmailAsync(email, subject, EmailLayout.Wrap(htmlMessage));
         }
         catch (Exception ex)
         {
@@ -58,7 +58,7 @@ public class AttendeeEmails(IEmailSender emailSender, NavigationManager navigati
 
     // Emails are read outside the site, so links need the full address.
     private string Link(string path, string text) =>
-        $"<p><a href=\"{navigation.ToAbsoluteUri(path)}\">{text}</a></p>";
+        EmailLayout.Button(navigation.ToAbsoluteUri(path).ToString(), text);
 
     // Organisers type these values, so HTML in them must show as text.
     private static string Encode(string text) => WebUtility.HtmlEncode(text);

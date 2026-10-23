@@ -22,41 +22,36 @@
 
 <PageTitle>Register as an organiser</PageTitle>
 
-<h1>Register as an organiser</h1>
+<div class="auth-form auth-form-wide">
+    <h1>Register as an organiser</h1>
+    <StatusMessage Message="@Message" />
+    <EditForm Model="Input" method="post" OnValidSubmit="RegisterAsync" FormName="register-organiser">
+        <DataAnnotationsValidator />
+        <p>Create an account and apply to organise events. An admin reviews each application.</p>
+        <ValidationSummary class="text-danger" role="alert" />
 
-<div class="row">
-    <div class="col-lg-6">
-        <StatusMessage Message="@Message" />
-        <EditForm Model="Input" method="post" OnValidSubmit="RegisterAsync" FormName="register-organiser">
-            <DataAnnotationsValidator />
-            <p>Create an account and apply to organise events. An admin reviews each application.</p>
-            <ValidationSummary class="text-danger" role="alert" />
+        <h2 class="h5 mt-4 mb-3">Your account</h2>
+        <div class="form-floating mb-3">
+            <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
+            <label for="Input.Email">Email</label>
+            <ValidationMessage For="() => Input.Email" class="text-danger" />
+        </div>
+        <div class="form-floating mb-3">
+            <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
+            <label for="Input.Password">Password</label>
+            <ValidationMessage For="() => Input.Password" class="text-danger" />
+        </div>
+        <div class="form-floating mb-3">
+            <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
+            <label for="Input.ConfirmPassword">Confirm Password</label>
+            <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
+        </div>
 
-            <h2>Your account</h2>
-            <hr />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
-                <label for="Input.Email">Email</label>
-                <ValidationMessage For="() => Input.Email" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
-                <label for="Input.Password">Password</label>
-                <ValidationMessage For="() => Input.Password" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
-                <label for="Input.ConfirmPassword">Confirm Password</label>
-                <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
-            </div>
+        <h2 class="h5 mt-4 mb-3">Your organisation</h2>
+        <OrganiserApplicationFields Input="Input" />
 
-            <h2>Your organisation</h2>
-            <hr />
-            <OrganiserApplicationFields Input="Input" />
-
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Register and apply</button>
-        </EditForm>
-    </div>
+        <button type="submit" class="w-100 btn btn-primary">Register and apply</button>
+    </EditForm>
 </div>
 
 @code {

@@ -22,7 +22,7 @@ Project rules, such as free tiers only and no secrets in code, live in a file it
 - Attendees get an email when they book or cancel, and when an event they booked is cancelled or moves venue.
 - Apply to become an organiser. Organisers can create, publish and cancel events and see who is attending.
 - Admins review organiser applications and manage users.
-- Accounts with email confirmation, two-factor authentication and passkeys.
+- Accounts with email confirmation and password reset. Light and dark mode follow the OS setting.
 
 ## What I used
 
